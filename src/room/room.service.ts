@@ -1,17 +1,39 @@
 // src/rooms/room.service.ts
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { Redis } from 'ioredis';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class RoomService {
-  // 실제로 Redis나 DB를 사용할 수 있지만, 여기서는 테스트용 간단 예시로 작성합니다.
-  getRoomInfo(roomId: string): any {
+  constructor(
+    @Inject('REDIS_CLIENT')
+    private readonly redisClient: Redis,
+  ) {}
+
+  // Redis에서 특정 roomId의 방 정보를 조회합니다.
+
+  async getRoomInfo(roomId: string): Promise<any> {
+    if (!roomId) {
+      throw new BadRequestException('roomId가 필요합니다.');
+    }
+    const redisKey = `room:${roomId}`;
+    const roomData = await this.redisClient.hgetall(redisKey);
+    if (!roomData || Object.keys(roomData).length === 0) {
+      throw new NotFoundException(`Room ${roomId} not found`);
+    }
     return {
-      id: roomId,
-      roomName: '초보만',
-      status: '진행 중',
-      mode: '8인 모드',
-      locked: false,
-      createdAt: '2025-02-17',
+      id: roomData.id,
+      hostId: roomData.hostId,
+      roomName: roomData.roomName,
+      status: roomData.status,
+      mode: roomData.mode,
+      locked: roomData.locked === 'true', // 문자열로 저장되므로 변환
+      password: roomData.password,
+      createdAt: roomData.createdAt,
     };
   }
 }

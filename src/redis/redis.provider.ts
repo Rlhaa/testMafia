@@ -1,4 +1,4 @@
-// src/redis/redis.client.ts
+// src/redis/redis.provider.ts
 import Redis from 'ioredis';
 
 export const RedisProvider = {
@@ -7,7 +7,6 @@ export const RedisProvider = {
     return new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: Number(process.env.REDIS_PORT) || 6379,
-      // 필요한 옵션 추가
     });
   },
 };
