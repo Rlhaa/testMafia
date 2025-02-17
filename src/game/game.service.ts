@@ -1,26 +1,53 @@
 // src/game/game.service.ts
-import { Injectable } from '@nestjs/common';
-import { redisClient } from '../redis/redis.client';
-import { Player } from './models/player.model';
-import { Game } from './models/game.model';
+import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import { Redis } from 'ioredis';
 
 @Injectable()
 export class GameService {
-  // 플레이어를 해당 방에 추가
-  async addPlayerToRoom(roomId: string, player: Player): Promise<void> {
-    const roomKey = `room:${roomId}`;
-    const roomData = await redisClient.get(roomKey);
-    if (!roomData) {
-      throw new Error('해당 방이 존재하지 않습니다.');
+  constructor(
+    @Inject('REDIS_CLIENT')
+    private readonly redisClient: Redis,
+  ) {}
+  // 클라이언트가 ROOM:GAME_START 이벤트를 보낼 때, 이벤트 페이로드에 roomId와 gameId를 함께 전달한다고 가정
+
+  //  Redis에서 게임 데이터를 조회합니다.
+  //  게임 데이터는 키 `room:{roomId}:game:{gameId}` 에 저장되어 있으며,
+  //  players 필드는 JSON 문자열로 저장되어 있다고 가정합니다.
+
+  async getGameData(roomId: string, gameId: string): Promise<any> {
+    if (!roomId || !gameId) {
+      throw new BadRequestException('roomId와 gameId가 필요합니다.');
     }
-    console.log(`플레이어 ${player.username} 추가됨: ${roomId}`);
-    // 실제 구현에서는 방의 플레이어 목록 업데이트 로직 추가
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.redisClient.hgetall(redisKey);
+    if (!gameData || Object.keys(gameData).length === 0) {
+      throw new BadRequestException('해당 게임 데이터가 존재하지 않습니다.');
+    }
+    // players 필드가 있으면 JSON 파싱 (없으면 빈 배열)
+    gameData.players = gameData.players ? JSON.parse(gameData.players) : [];
+    return gameData;
   }
 
-  // 게임 시작: 역할 분배 및 초기 게임 객체 생성 (DAY1 낮)
-  // 수정: 할당된 플레이어 배열을 반환
-  async startGame(roomId: string): Promise<Player[]> {
-    const roles: ('mafia' | 'citizen' | 'police' | 'doctor')[] = [
+  //  ROOM:GAME_START 이벤트 신호를 받아 역할 분배를수행
+  //  게임 데이터에서 players 배열을 확인
+  //  플레이어 수가 8명인지 검증
+  //  고정 역할 풀(마피아 2, 시민 4, 경찰 1, 의사 1)을 무작위로 섞어 할당
+  //  업데이트된 players 배열과 게임 상태를 Redis에 저장
+
+  async assignRoles(roomId: string, gameId: string): Promise<any> {
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players = gameData.players;
+    const requiredPlayers = 8; // 테스트 단계: 8명이 꽉 차야 시작
+
+    if (players.length < requiredPlayers) {
+      throw new BadRequestException(
+        '플레이어 수가 부족하여 역할 분배를 진행할 수 없습니다.',
+      );
+    }
+
+    // 고정 역할 분배: mafia 2, citizen 4, police 1, doctor 1
+    const rolesPool = [
       'mafia',
       'mafia',
       'citizen',
@@ -30,129 +57,23 @@ export class GameService {
       'police',
       'doctor',
     ];
-    const players = await this.getPlayersForRoom(roomId);
-    if (players.length !== 8) {
-      throw new Error('8명의 플레이어가 모여야 게임을 시작할 수 있습니다.');
-    }
-    // 역할 무작위 분배
-    const shuffledRoles = roles.sort(() => Math.random() - 0.5);
-    players.forEach((player, index) => {
-      player.role = shuffledRoles[index];
-    });
-    const game: Game = {
-      id: Date.now(),
-      roomId,
-      round: 1,
-      playersId: players.map((p) => p.userId),
-      isNight: false,
-      targetIds: [],
-      aliveIds: players.map((p) => p.userId),
-      deadIds: [],
-      isVote: false,
-    };
-    await redisClient.set(`game:${roomId}`, JSON.stringify(game));
-    console.log(`게임 시작됨: ${roomId}, 라운드: ${game.round}`);
-    // 반환된 플레이어 배열에는 이미 역할이 할당되어 있음
-    return players;
-  }
+    rolesPool.sort(() => Math.random() - 0.5); // 무작위 섞기
 
-  // 하드코딩된 플레이어 목록 반환 (실제 구현 시 DB나 Redis에서 조회)
-  async getPlayersForRoom(roomId: string): Promise<Player[]> {
-    return [
-      { id: 1, userId: 1001, username: 'Player1', roomId, isAlive: true },
-      { id: 2, userId: 1002, username: 'Player2', roomId, isAlive: true },
-      { id: 3, userId: 1003, username: 'Player3', roomId, isAlive: true },
-      { id: 4, userId: 1004, username: 'Player4', roomId, isAlive: true },
-      { id: 5, userId: 1005, username: 'Player5', roomId, isAlive: true },
-      { id: 6, userId: 1006, username: 'Player6', roomId, isAlive: true },
-      { id: 7, userId: 1007, username: 'Player7', roomId, isAlive: true },
-      { id: 8, userId: 1008, username: 'Player8', roomId, isAlive: true },
-    ];
-  }
+    // 각 플레이어에게 역할과 초기 상태 할당
+    const updatedPlayers = players.map((player, index) => ({
+      ...player,
+      role: rolesPool[index],
+      isAlive: true,
+    }));
 
-  // 플레이어 준비 상태 처리 (예시)
-  async setPlayerReady(roomId: string, userId: number): Promise<void> {
-    console.log(`플레이어 ${userId}가 준비됨.`);
-    // 실제 구현에서는 준비 상태 저장 후, 모두 준비되면 다음 단계 진행 로직 추가
-  }
+    // Redis 업데이트: players 필드와 phase(예: 'rolesAssigned') 업데이트
+    await this.redisClient.hset(
+      redisKey,
+      'players',
+      JSON.stringify(updatedPlayers),
+    );
+    await this.redisClient.hset(redisKey, 'phase', 'rolesAssigned');
 
-  // 야간 행동 처리: 마피아, 의사, 경찰의 행동을 받아 결과 처리
-  async processNightActions(
-    roomId: string,
-    actions: {
-      mafiaActions?: { [userId: number]: number };
-      doctorAction?: number;
-      policeAction?: number;
-    },
-  ): Promise<any> {
-    const gameData = await redisClient.get(`game:${roomId}`);
-    if (!gameData) throw new Error('Game not found');
-    let game: Game = JSON.parse(gameData);
-
-    // 야간 행동 저장
-    game.mafiaActions = actions.mafiaActions;
-    game.doctorAction = actions.doctorAction;
-    game.policeAction = actions.policeAction;
-
-    // killResult: 객체 또는 null
-    let killResult: {
-      killed: boolean;
-      reason?: string;
-      target?: number;
-    } | null = null;
-    const mafiaTargets = game.mafiaActions
-      ? Object.values(game.mafiaActions)
-      : [];
-    let target = mafiaTargets.length > 0 ? mafiaTargets[0] : null;
-    if (target !== null) {
-      if (game.doctorAction === target) {
-        killResult = { killed: false, reason: 'protected' };
-      } else {
-        game.aliveIds = game.aliveIds.filter((id) => id !== target);
-        game.deadIds.push(target);
-        killResult = { killed: true, target };
-      }
-    }
-
-    // policeResult: 객체 또는 null; role은 null 허용
-    let policeResult: {
-      inspected: boolean;
-      role: 'mafia' | 'citizen' | 'police' | 'doctor' | null;
-    } | null = null;
-    if (game.policeAction) {
-      const player = await this.getPlayerById(roomId, game.policeAction);
-      if (player) {
-        policeResult = {
-          inspected: true,
-          role: player.role !== undefined ? player.role : null,
-        };
-      }
-    }
-
-    await redisClient.set(`game:${roomId}`, JSON.stringify(game));
-    return { killResult, policeResult, game };
-  }
-
-  // 낮 투표 기록 저장
-  async recordVote(
-    roomId: string,
-    voterId: number,
-    targetId: number,
-  ): Promise<void> {
-    const gameData = await redisClient.get(`game:${roomId}`);
-    if (!gameData) throw new Error('Game not found');
-    let game: Game = JSON.parse(gameData);
-    if (!game.voteRecords) {
-      game.voteRecords = [];
-    }
-    game.voteRecords.push({ voterId, targetId });
-    await redisClient.set(`game:${roomId}`, JSON.stringify(game));
-    console.log(`플레이어 ${voterId}가 ${targetId}에게 투표함.`);
-  }
-
-  // userId로 플레이어 정보 조회 (하드코딩된 목록 사용)
-  async getPlayerById(roomId: string, userId: number): Promise<Player | null> {
-    const players = await this.getPlayersForRoom(roomId);
-    return players.find((p) => p.userId === userId) || null;
+    return updatedPlayers;
   }
 }

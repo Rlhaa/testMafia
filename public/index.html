@@ -1,136 +1,66 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>마피아 게임 테스트 클라이언트</title>
-    <!-- Socket.IO 클라이언트 라이브러리 -->
-    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-
-        input,
-        button {
-            margin: 5px;
-        }
-
-        #log p {
-            background: #f0f0f0;
-            padding: 5px;
-            border-radius: 3px;
-        }
-    </style>
+    <title>Room Chat Test</title>
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
 </head>
 
 <body>
-    <h1>마피아 게임 테스트 클라이언트</h1>
+    <h1>Room Chat Test</h1>
+    <!-- roomId를 URL에서 추출하므로 userId 입력만 받도록 함 -->
     <div>
-        <label for="roomId">Room ID:</label>
-        <input type="text" id="roomId" value="room1">
+        <label for="userId">User ID: </label>
+        <input type="number" id="userId" placeholder="1">
+        <button id="loginBtn">Login (Enter Room)</button>
     </div>
-    <div>
-        <label for="username">Username:</label>
-        <input type="text" id="username" value="Player1">
+    <div id="chatRoom" style="display: none;">
+        <h2 id="roomTitle">Chat Room</h2>
+        <div id="chatMessages" style="border: 1px solid #ccc; height: 200px; overflow-y: scroll;"></div>
+        <input type="text" id="messageInput" placeholder="Type your message">
+        <button id="sendBtn">Send</button>
     </div>
-    <button id="joinRoomBtn">방 참가</button>
-    <button id="startGameBtn">게임 시작</button>
-    <br>
-    <button id="playerReadyBtn">준비</button>
-    <br>
-    <h2>야간 행동</h2>
-    <div>
-        <label>마피아 행동 (형식: userId:targetId, 예: 1001:1003,1002:1003):</label>
-        <input type="text" id="mafiaAction">
-    </div>
-    <div>
-        <label>의사 행동 (보호할 플레이어 userId):</label>
-        <input type="number" id="doctorAction">
-    </div>
-    <div>
-        <label>경찰 행동 (조사할 플레이어 userId):</label>
-        <input type="number" id="policeAction">
-    </div>
-    <button id="submitNightActionsBtn">야간 행동 제출</button>
-    <br>
-    <h2>투표</h2>
-    <div>
-        <label>투표 (형식: voterId,targetId):</label>
-        <input type="text" id="voteInput">
-    </div>
-    <button id="voteBtn">투표하기</button>
-
-    <h2>로그</h2>
-    <div id="log"></div>
 
     <script>
-        const socket = io('http://localhost:3000');
+        // URL에서 roomId 추출: URL이 http://localhost:3000/room/1 형태라고 가정
+        const pathSegments = window.location.pathname.split('/');
+        // 마지막 세그먼트가 roomId라고 가정 (예: "1")
+        const roomId = pathSegments[pathSegments.length - 1];
+        document.getElementById('roomTitle').textContent = `Chat Room (Room ${roomId})`;
 
-        socket.on('connect', () => {
-            addLog('서버에 연결됨 (소켓 ID: ' + socket.id + ')');
-        });
-        socket.on('joinedRoom', data => addLog('방에 참가 완료: ' + data.roomId));
-        socket.on('gameStarted', data => addLog('게임이 시작되었습니다! 방 ID: ' + data.roomId));
-        socket.on('yourRole', data => addLog('당신의 역할: ' + data.role));
-        socket.on('playerReadyAck', data => addLog('플레이어 ' + data.userId + ' 준비됨'));
-        socket.on('nightResult', data => addLog('야간 결과: ' + JSON.stringify(data)));
-        socket.on('voteUpdated', data => addLog('투표 업데이트: ' + JSON.stringify(data)));
-        socket.on('error', data => addLog('에러: ' + data.message));
+        const socket = io('http://localhost:3000/room'); // room 네임스페이스에 연결
+        let currentUserId;
 
-        document.getElementById('joinRoomBtn').addEventListener('click', () => {
-            const roomId = document.getElementById('roomId').value;
-            const username = document.getElementById('username').value;
-            // role은 생략하면 undefined가 됩니다.
-            const player = {
-                id: Date.now(),
-                userId: Date.now(),  // 실제 환경에서는 고유 userId를 사용
-                username: username,
-                roomId: roomId,
-                isAlive: true,
-            };
-            socket.emit('joinRoom', { roomId, player });
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            const userIdInput = document.getElementById('userId').value;
+            if (!userIdInput) {
+                alert('User ID를 입력하세요.');
+                return;
+            }
+            currentUserId = Number(userIdInput);
+            // URL에서 추출한 roomId를 사용하여 방에 입장
+            socket.emit('joinRoom', { roomId, userId: currentUserId });
+            document.getElementById('chatRoom').style.display = 'block';
         });
 
-        document.getElementById('startGameBtn').addEventListener('click', () => {
-            const roomId = document.getElementById('roomId').value;
-            socket.emit('startGame', { roomId });
+        document.getElementById('sendBtn').addEventListener('click', () => {
+            const message = document.getElementById('messageInput').value;
+            if (message.trim() === '') return;
+            socket.emit('chatMessage', { roomId, userId: currentUserId, message });
+            document.getElementById('messageInput').value = '';
         });
 
-        document.getElementById('playerReadyBtn').addEventListener('click', () => {
-            const roomId = document.getElementById('roomId').value;
-            const userId = parseInt(prompt("플레이어 userId 입력 (예: 1001)"));
-            socket.emit('playerReady', { roomId, userId });
+        socket.on('message', (data) => {
+            const chatMessagesDiv = document.getElementById('chatMessages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `[${data.sender}] ${data.message}`;
+            chatMessagesDiv.appendChild(messageElement);
         });
 
-        document.getElementById('submitNightActionsBtn').addEventListener('click', () => {
-            const roomId = document.getElementById('roomId').value;
-            const mafiaActionInput = document.getElementById('mafiaAction').value;
-            const doctorAction = parseInt(document.getElementById('doctorAction').value);
-            const policeAction = parseInt(document.getElementById('policeAction').value);
-
-            const mafiaActions = {};
-            mafiaActionInput.split(',').forEach(pair => {
-                const [userId, targetId] = pair.split(':').map(Number);
-                mafiaActions[userId] = targetId;
-            });
-
-            socket.emit('submitNightActions', { roomId, actions: { mafiaActions, doctorAction, policeAction } });
+        socket.on('error', (data) => {
+            alert(`Error: ${data.message}`);
         });
-
-        document.getElementById('voteBtn').addEventListener('click', () => {
-            const roomId = document.getElementById('roomId').value;
-            const [voterId, targetId] = document.getElementById('voteInput').value.split(',').map(Number);
-            socket.emit('vote', { roomId, voterId, targetId });
-        });
-
-        function addLog(message) {
-            const logDiv = document.getElementById('log');
-            const p = document.createElement('p');
-            p.textContent = message;
-            logDiv.appendChild(p);
-        }
     </script>
 </body>
 
