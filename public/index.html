@@ -3,64 +3,127 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Room Chat Test</title>
+    <title>Room Chat & Game Test</title>
     <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
 </head>
 
 <body>
     <h1>Room Chat Test</h1>
-    <!-- roomId를 URL에서 추출하므로 userId 입력만 받도록 함 -->
+    <!-- roomId는 URL에서 추출하므로 userId 입력만 받음 -->
     <div>
         <label for="userId">User ID: </label>
         <input type="number" id="userId" placeholder="1">
         <button id="loginBtn">Login (Enter Room)</button>
     </div>
+
+    <!-- 채팅 영역 -->
     <div id="chatRoom" style="display: none;">
-        <h2 id="roomTitle">Chat Room</h2>
+        <h2 id="roomTitle"></h2>
         <div id="chatMessages" style="border: 1px solid #ccc; height: 200px; overflow-y: scroll;"></div>
         <input type="text" id="messageInput" placeholder="Type your message">
         <button id="sendBtn">Send</button>
     </div>
 
+    <!-- 게임 상태 영역 -->
+    <div id="gameSection" style="display: none; margin-top: 20px;">
+        <h2>Game Status</h2>
+        <div id="gameStatus" style="margin-top: 10px;"></div>
+    </div>
+
     <script>
-        // URL에서 roomId 추출: URL이 http://localhost:3000/room/1 형태라고 가정
-        const pathSegments = window.location.pathname.split('/');
-        // 마지막 세그먼트가 roomId라고 가정 (예: "1")
-        const roomId = pathSegments[pathSegments.length - 1];
-        document.getElementById('roomTitle').textContent = `Chat Room (Room ${roomId})`;
+        // 방 ID 추출
+        var pathSegments = window.location.pathname.split('/');
+        var roomId = pathSegments[pathSegments.length - 1];
+        document.getElementById('roomTitle').textContent = "Chat Room (Room " + roomId + ")";
 
-        const socket = io('http://localhost:3000/room'); // room 네임스페이스에 연결
-        let currentUserId;
+        var currentUserId;
+        var socket;      // 단일 소켓으로 모든 이벤트 처리
+        var roomInfo;    // ROOM:JOINED 이벤트로 받아온 방 정보
 
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            const userIdInput = document.getElementById('userId').value;
+        // 로그인 버튼 클릭 시
+        document.getElementById("loginBtn").addEventListener("click", function () {
+            var userIdInput = document.getElementById("userId").value;
             if (!userIdInput) {
-                alert('User ID를 입력하세요.');
+                alert("User ID를 입력하세요.");
                 return;
             }
             currentUserId = Number(userIdInput);
-            // URL에서 추출한 roomId를 사용하여 방에 입장
-            socket.emit('joinRoom', { roomId, userId: currentUserId });
-            document.getElementById('chatRoom').style.display = 'block';
+
+            // 단일 소켓 생성 (auth 옵션 사용)
+            socket = io("http://localhost:3000/room", {
+                auth: { roomId: roomId, userId: currentUserId }
+            });
+
+            // UI 표시
+            document.getElementById("chatRoom").style.display = "block";
+            document.getElementById("gameSection").style.display = "block";
+
+            // 방 입장 요청
+            socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
+
+            // ROOM:JOINED 이벤트로 방 정보를 받아 저장
+            socket.once("ROOM:JOINED", function (data) {
+                roomInfo = data;
+                console.log("방 정보:", roomInfo);
+                setupGameStartListener();
+            });
+
+            // 채팅 메시지 수신 핸들러
+            socket.on("message", function (data) {
+                appendChatMessage("[" + data.sender + "] " + data.message);
+            });
+
+            // 채팅 메시지 전송 핸들러
+            document.getElementById("sendBtn").addEventListener("click", sendChatMessage);
+
+            // 게임 이벤트 YOUR_ROLE 수신 핸들러
+            socket.on("YOUR_ROLE", function (data) {
+                console.log("YOUR_ROLE 이벤트 수신:", data);
+                appendChatMessage(data.message, true);
+            });
+
+            // 에러 핸들러
+            socket.on("error", function (data) {
+                alert("Game Error: " + data.message);
+            });
         });
 
-        document.getElementById('sendBtn').addEventListener('click', () => {
-            const message = document.getElementById('messageInput').value;
-            if (message.trim() === '') return;
-            socket.emit('chatMessage', { roomId, userId: currentUserId, message });
-            document.getElementById('messageInput').value = '';
-        });
-
-        socket.on('message', (data) => {
-            const chatMessagesDiv = document.getElementById('chatMessages');
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `[${data.sender}] ${data.message}`;
+        // 채팅 메시지 추가 함수
+        function appendChatMessage(message, isRole) {
+            var chatMessagesDiv = document.getElementById("chatMessages");
+            var messageElement = document.createElement("div");
+            if (isRole) {
+                messageElement.style.fontWeight = "bold";
+                messageElement.style.color = "blue";
+            }
+            messageElement.textContent = message;
             chatMessagesDiv.appendChild(messageElement);
-        });
+        }
 
-        socket.on('error', (data) => {
-            alert(`Error: ${data.message}`);
-        });
+        // 채팅 메시지 전송 함수
+        function sendChatMessage() {
+            var messageInputElem = document.getElementById("messageInput");
+            var message = messageInputElem ? messageInputElem.value : "";
+            if (message.trim() === "") return;
+            socket.emit("chatMessage", { roomId: roomId, userId: currentUserId, message: message });
+            if (messageInputElem) {
+                messageInputElem.value = "";
+            }
+        }
+
+        // ROOM:GAME_START 이벤트 리스너 설정
+        function setupGameStartListener() {
+            socket.on("ROOM:GAME_START", function (data) {
+                console.log("ROOM:GAME_START 이벤트 수신됨.", data);
+                // 호스트일 경우만 게임 시작 요청을 서버에 전달
+                if (currentUserId.toString() === roomInfo.hostId) {
+                    console.log("호스트의 요청 전달 중...");
+                    socket.emit("ROOM:GAME_START", data);
+                } else {
+                    console.log("게임이 시작됩니다. 준비하세요!");
+                }
+            });
+        }
     </script>
 </body>
 
