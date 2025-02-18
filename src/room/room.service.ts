@@ -10,33 +10,35 @@ import { Inject } from '@nestjs/common';
 export class RoomService {
   constructor(
     @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis,
+    private readonly redisClient: Redis, // Redis 클라이언트 주입
   ) {}
 
-  // Redis에서 특정 roomId의 방 정보를 조회합니다.
+  // getRoomInfo
+  // - 주어진 roomId의 방 정보를 Redis에서 조회하여 객체 형태로 반환합니다.
   async getRoomInfo(roomId: string): Promise<any> {
     if (!roomId) {
       throw new BadRequestException('roomId가 필요합니다.');
     }
-    const redisKey = `room:${roomId}`;
-    const roomData = await this.redisClient.hgetall(redisKey);
+    const redisKey = `room:${roomId}`; // Redis 키 생성
+    const roomData = await this.redisClient.hgetall(redisKey); // Redis 해시 조회
     if (!roomData || Object.keys(roomData).length === 0) {
       throw new NotFoundException(`Room ${roomId} not found`);
     }
     return {
-      id: roomData.id,
-      hostId: roomData.hostId,
-      roomName: roomData.roomName,
-      status: roomData.status,
-      mode: roomData.mode,
-      locked: roomData.locked === 'true',
-      password: roomData.password,
-      createdAt: roomData.createdAt,
-      players: roomData.players, // JSON 문자열로 저장됨
+      id: roomData.id, // 방 ID
+      hostId: roomData.hostId, // 호스트 ID
+      roomName: roomData.roomName, // 방 이름
+      status: roomData.status, // 방 상태
+      mode: roomData.mode, // 방 모드
+      locked: roomData.locked === 'true', // 문자열 -> boolean 변환
+      password: roomData.password, // 방 비밀번호
+      createdAt: roomData.createdAt, // 생성일
+      players: roomData.players, // 플레이어 목록 (JSON 문자열)
     };
   }
 
-  // 방의 플레이어 목록을 업데이트 (players 배열을 JSON 문자열로 저장)
+  // updateRoomPlayers
+  // - 플레이어 목록 배열을 JSON 문자열로 변환하여 Redis에 저장합니다.
   async updateRoomPlayers(
     roomId: string,
     players: { id: number }[],
@@ -48,7 +50,9 @@ export class RoomService {
     await this.redisClient.hset(redisKey, 'players', JSON.stringify(players));
   }
 
-  // 방에 플레이어 추가 (최대 8명 제한)
+  // addPlayer
+  // - 주어진 roomId에 새 플레이어를 추가합니다.
+  // - 최대 8명 제한을 적용하며, 중복 추가를 방지합니다.
   async addPlayer(
     roomId: string,
     newPlayer: { id: number },

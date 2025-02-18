@@ -133,3 +133,42 @@ testMafia
 └─ tsconfig.json
 
 ```
+```
+testMafia
+├─ .prettierrc
+├─ eslint.config.mjs
+├─ nest-cli.json
+├─ package-lock.json
+├─ package.json
+├─ public
+│  └─ index.html
+├─ README.md
+├─ src
+│  ├─ app.controller.ts
+│  ├─ app.module.ts
+│  ├─ app.service.ts
+│  ├─ game
+│  │  ├─ game.module.ts
+│  │  ├─ game.service.ts
+│  │  ├─ interfaces
+│  │  │  └─ game.interface.ts
+│  │  └─ models
+│  │     ├─ game.model.ts
+│  │     ├─ player.model.ts
+│  │     ├─ room.model.ts
+│  │     └─ vote.model.ts
+│  ├─ main.ts
+│  ├─ redis
+│  │  └─ redis.provider.ts
+│  └─ room
+│     ├─ room.controller.ts
+│     ├─ room.gateway.ts
+│     ├─ room.module.ts
+│     └─ room.service.ts
+├─ test
+│  ├─ app.e2e-spec.ts
+│  └─ jest-e2e.json
+├─ tsconfig.build.json
+└─ tsconfig.json
+
+```

@@ -1,50 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 
 <head>
     <meta charset="UTF-8">
-    <title>Room Chat & Game Test</title>
+    <title>룸 채팅 및 게임 테스트</title>
     <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        /* 전체 컨테이너: 채팅과 방 인원 목록을 좌우로 배치 (7:3 비율) */
+        .container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-container {
+            flex: 7;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .occupant-container {
+            flex: 3;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        #chatMessages {
+            border: 1px solid #ccc;
+            height: 300px;
+            overflow-y: auto;
+            padding: 5px;
+            background-color: #f9f9f9;
+            margin-bottom: 10px;
+        }
+
+        #occupantList {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+
+        #occupantList div {
+            border: 1px solid #aaa;
+            padding: 5px;
+            text-align: center;
+            background-color: #fff;
+            height: 70px;
+        }
+
+        .system-message {
+            color: green;
+            font-weight: bold;
+        }
+
+        .role-message {
+            color: blue;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Room Chat Test</h1>
-    <!-- roomId는 URL에서 추출하므로 userId 입력만 받음 -->
+    <h1>룸 채팅 테스트</h1>
+    <!-- 사용자 ID 입력 -->
     <div>
-        <label for="userId">User ID: </label>
+        <label for="userId">사용자 ID: </label>
         <input type="number" id="userId" placeholder="1">
-        <button id="loginBtn">Login (Enter Room)</button>
+        <button id="loginBtn">로그인 (룸 입장)</button>
     </div>
-
-    <!-- 채팅 영역 -->
-    <div id="chatRoom" style="display: none;">
-        <h2 id="roomTitle"></h2>
-        <div id="chatMessages" style="border: 1px solid #ccc; height: 200px; overflow-y: scroll;"></div>
-        <input type="text" id="messageInput" placeholder="Type your message">
-        <button id="sendBtn">Send</button>
+    <!-- 전체 컨테이너 -->
+    <div class="container" id="mainContainer" style="display: none;">
+        <!-- 채팅 영역 -->
+        <div class="chat-container" id="chatRoom">
+            <h2 id="roomTitle"></h2>
+            <div id="chatMessages"></div>
+            <input type="text" id="messageInput" placeholder="메시지를 입력하세요">
+            <button id="sendBtn">전송</button>
+        </div>
+        <!-- 방 접속 인원 영역 -->
+        <div class="occupant-container" id="roomOccupants">
+            <h2>현재 접속 인원</h2>
+            <div id="occupantList"></div>
+        </div>
     </div>
-
     <!-- 게임 상태 영역 -->
     <div id="gameSection" style="display: none; margin-top: 20px;">
-        <h2>Game Status</h2>
-        <div id="gameStatus" style="margin-top: 10px;"></div>
+        <h2>게임 상태</h2>
+        <div id="gameStatus"></div>
     </div>
-
     <script>
-        // 방 ID 추출
+        // 방 ID 추출 (예: http://localhost:3000/room/1)
         var pathSegments = window.location.pathname.split('/');
         var roomId = pathSegments[pathSegments.length - 1];
-        document.getElementById('roomTitle').textContent = "Chat Room (Room " + roomId + ")";
+        document.getElementById('roomTitle').textContent = "채팅룸 (룸 " + roomId + ")";
 
         var currentUserId;
-        var socket;      // 단일 소켓으로 모든 이벤트 처리
-        var roomInfo;    // ROOM:JOINED 이벤트로 받아온 방 정보
+        var socket;      // 단일 소켓
+        var roomInfo;    // ROOM:JOINED 또는 ROOM:UPDATED 이벤트로 최신 방 정보 수신
 
-        // 로그인 버튼 클릭 시
         document.getElementById("loginBtn").addEventListener("click", function () {
             var userIdInput = document.getElementById("userId").value;
             if (!userIdInput) {
-                alert("User ID를 입력하세요.");
+                alert("사용자 ID를 입력하세요.");
                 return;
             }
             currentUserId = Number(userIdInput);
@@ -55,36 +116,41 @@
             });
 
             // UI 표시
-            document.getElementById("chatRoom").style.display = "block";
+            document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
 
             // 방 입장 요청
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
 
-            // ROOM:JOINED 이벤트로 방 정보를 받아 저장
+            // ROOM:JOINED 이벤트 (초기 방 정보)
             socket.once("ROOM:JOINED", function (data) {
                 roomInfo = data;
-                console.log("방 정보:", roomInfo);
-                setupGameStartListener();
+                console.log("방 정보 (JOINED):", roomInfo);
+                updateOccupantList(roomInfo);
             });
 
-            // 채팅 메시지 수신 핸들러
+            // ROOM:UPDATED 이벤트 (실시간 방 정보 업데이트)
+            socket.on("ROOM:UPDATED", function (data) {
+                roomInfo = data;
+                console.log("방 정보 (UPDATED):", roomInfo);
+                updateOccupantList(roomInfo);
+            });
+
+            // 채팅 메시지 수신
             socket.on("message", function (data) {
                 appendChatMessage("[" + data.sender + "] " + data.message);
             });
 
-            // 채팅 메시지 전송 핸들러
             document.getElementById("sendBtn").addEventListener("click", sendChatMessage);
 
-            // 게임 이벤트 YOUR_ROLE 수신 핸들러
+            // 게임 이벤트 YOUR_ROLE 수신
             socket.on("YOUR_ROLE", function (data) {
                 console.log("YOUR_ROLE 이벤트 수신:", data);
                 appendChatMessage(data.message, true);
             });
 
-            // 에러 핸들러
             socket.on("error", function (data) {
-                alert("Game Error: " + data.message);
+                alert("게임 에러: " + data.message);
             });
         });
 
@@ -93,8 +159,7 @@
             var chatMessagesDiv = document.getElementById("chatMessages");
             var messageElement = document.createElement("div");
             if (isRole) {
-                messageElement.style.fontWeight = "bold";
-                messageElement.style.color = "blue";
+                messageElement.className = "role-message";
             }
             messageElement.textContent = message;
             chatMessagesDiv.appendChild(messageElement);
@@ -111,17 +176,21 @@
             }
         }
 
-        // ROOM:GAME_START 이벤트 리스너 설정
-        function setupGameStartListener() {
-            socket.on("ROOM:GAME_START", function (data) {
-                console.log("ROOM:GAME_START 이벤트 수신됨.", data);
-                // 호스트일 경우만 게임 시작 요청을 서버에 전달
-                if (currentUserId.toString() === roomInfo.hostId) {
-                    console.log("호스트의 요청 전달 중...");
-                    socket.emit("ROOM:GAME_START", data);
-                } else {
-                    console.log("게임이 시작됩니다. 준비하세요!");
-                }
+        // 방 접속 인원 업데이트 함수
+        function updateOccupantList(roomData) {
+            var occupantListDiv = document.getElementById("occupantList");
+            occupantListDiv.innerHTML = ""; // 기존 목록 초기화
+            var players = [];
+            try {
+                players = typeof roomData.players === "string" ? JSON.parse(roomData.players) : roomData.players;
+            } catch (error) {
+                players = [];
+            }
+            // 2열 그리드로 플레이어 목록 표시
+            players.forEach(function (player) {
+                var item = document.createElement("div");
+                item.textContent = "사용자 " + player.id;
+                occupantListDiv.appendChild(item);
             });
         }
     </script>
