@@ -63,25 +63,24 @@ export class RoomGateway implements OnGatewayDisconnect {
   //
   @SubscribeMessage('chatDead')
   async handleChatDead(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    // 해당 방의 모든 플레이어를 가져옵니다.
-    const players = await this.roomService.getPlayersInRoom(data.roomId);
+  @MessageBody() data: { roomId: string; userId: number; message: string },
+  @ConnectedSocket() client: Socket,): Promise<void> {
 
-    // 마피아인 플레이어만 필터링합니다.
-    const deads = players.filter(
-      (player) => player.isAlive === 'false' ,
-    );
+    // 해당 방의 게임 데이터 가져오기
+    const roomData = await this.roomService.getRoomInfo(data.roomId);
 
-    // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
-    deads.forEach((dead) => {
-      this.server.to(dead.userId.toString()).emit('CHAT:DEAD', {
+    // 죽은 플레이어만 필터링
+    const deadPlayers = roomData.players.filter((player) => player.isAlive === false);
+
+    // 죽은 플레이어에게만 메시지 전송
+    deadPlayers.forEach((deadPlayer) => {
+      this.server.to(deadPlayer.id.toString()).emit('CHAT:DEAD', {
         sender: data.userId,
         message: data.message,
       });
     });
-  }
+}
+
 
   
 
