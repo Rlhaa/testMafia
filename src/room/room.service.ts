@@ -198,7 +198,7 @@ export class RoomService {
     const sockets = await server.in(roomId).allSockets();
     if (sockets.size === 8 && !this.roomCountdownTimers.has(roomId)) {
       const timer = setTimeout(async () => {
-        await this.startGame(server, roomId);
+        await this.prepareGame(server, roomId);
         this.roomCountdownTimers.delete(roomId);
       }, 10000);
       this.roomCountdownTimers.set(roomId, timer);
@@ -259,8 +259,8 @@ export class RoomService {
     }
   }
 
-  // startGame: 게임 생성 및 역할 분배 후 각 소켓에 YOUR_ROLE 이벤트 전송
-  async startGame(server: Server, roomId: string): Promise<void> {
+  // initialGameSetting: 게임 생성 및 역할 분배 후 각 소켓에 YOUR_ROLE 이벤트 전송
+  async prepareGame(server: Server, roomId: string): Promise<void> {
     try {
       const gameId = await this.gameService.createGame(roomId);
       const updatedPlayers = await this.gameService.assignRoles(roomId, gameId);
@@ -293,6 +293,16 @@ export class RoomService {
           }, 3000);
         }
       });
+
+      // 역할 분배 후, 즉시 낮 시작으로 전환 (예: 3초 후 낮 시작 알림)
+      // 6초 후 낮 시작 처리 및 메시지 전송
+      setTimeout(async () => {
+        const newDay = await this.gameService.startDayPhase(roomId, gameId);
+        server.to(roomId).emit('message', {
+          sender: 'system',
+          message: `Day ${newDay} 낮이 밝았습니다!`,
+        });
+      }, 6000);
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }

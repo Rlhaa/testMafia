@@ -7,7 +7,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { GameService } from '../game/game.service';
+import { GameService, FirstVote } from '../game/game.service';
 import { RoomService } from './room.service';
 
 @WebSocketGateway({
@@ -69,5 +69,47 @@ export class RoomGateway implements OnGatewayDisconnect {
     const roomId = client.handshake.auth.roomId as string;
     const userId = client.handshake.auth.userId as number;
     await this.roomService.leaveRoom(this.server, client, roomId, userId);
+  }
+
+  // 낮 시작 요청 이벤트 (예: 모든 유저가 투표 완료 후)
+  // @SubscribeMessage('START_DAY')
+  // async handleStartDay(
+  //   @MessageBody() data: { roomId: string; gameId: string },
+  //   @ConnectedSocket() client: Socket,
+  // ) {
+  //   try {
+  //     const updatedDay = await this.gameService.startDayPhase(
+  //       data.roomId,
+  //       data.gameId,
+  //     );
+  //     const updatedGameData = await this.gameService.getGameData(
+  //       data.roomId,
+  //       data.gameId,
+  //     );
+  //     this.server.to(data.roomId).emit('GAME:UPDATED', updatedGameData);
+  //     client.emit('message', {
+  //       sender: 'system',
+  //       message: `낮이 ${updatedDay}로 시작되었습니다!`,
+  //     });
+  //   } catch (error: any) {
+  //     client.emit('error', { message: error.message });
+  //   }
+  // }
+
+  @SubscribeMessage('VOTE:PLAYER')
+  async handleFirstVote(
+    @MessageBody() data: { roomId: string; gameId: string; votes: FirstVote[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      const targetToVote = await this.gameService.processFirstVote(
+        data.roomId,
+        data.gameId,
+        data.votes,
+      );
+      client.emit('VOTE:RESULT', { target: targetToVote });
+    } catch (error) {
+      client.emit('error', { message: error.message });
+    }
   }
 }
