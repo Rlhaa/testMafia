@@ -2,6 +2,22 @@ import { Injectable, BadRequestException, Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 
+interface FirstVote {
+  voterId: number;
+  targetId: number; // 투표 대상의 ID
+}
+
+interface SecondVote {
+  voterId: number;
+  execute: boolean; // true: 대상 실행, false: 대상 생존 선택
+}
+
+interface Player {
+  id: number;
+  role?: string;
+  isAlive?: boolean;
+}
+
 @Injectable()
 export class GameService {
   constructor(
@@ -18,8 +34,8 @@ export class GameService {
     }
     const gameId = uuidv4(); // 고유 게임 ID 생성
     const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    // console.log('Game ID:', gameId);
-    // console.log('Redis Key:', redisKey);
+    console.log('Game ID:', gameId);
+    console.log('Redis Key:', redisKey);
 
     // 방에 저장된 플레이어 목록 가져오기
     const roomPlayersData = await this.redisClient.hget(
@@ -27,7 +43,7 @@ export class GameService {
       'players',
     );
 
-    // 플레이어 빈 배열 생성ㅇ 후
+    // 플레이어 빈 배열 생성 후
     let players = [];
     if (roomPlayersData) {
       try {
@@ -40,7 +56,7 @@ export class GameService {
 
     // 초기 게임 상태 구성
     const initialGameState = {
-      day: '1',
+      day: '0',
       phase: 'morning',
       mafiaCount: '2',
       citizenCount: '6',
@@ -129,5 +145,70 @@ export class GameService {
     await this.redisClient.hset(redisKey, 'phase', 'rolesAssigned'); // 게임 phase 업데이트
 
     return updatedPlayers; // 업데이트된 배열 반환
+  }
+
+  async startDayPhase(roomId: string, gameId: string): Promise<void> {
+    // 들어온 인자로 레디스 키 구성
+    const redisKey = `room:${roomId}:game:${gameId}`;
+
+    // 현재 게임 데이터를 get
+    const gameData = await this.getGameData(roomId, gameId);
+
+    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
+    let currentDay = parseInt(gameData.day, 10) || 0;
+
+    // day 값을 1 증가
+    currentDay += 1;
+
+    // 게임 상태 업데이트: 새로운 day와 낮 단계("day")로 설정
+    await this.redisClient.hset(redisKey, 'day', currentDay.toString());
+    await this.redisClient.hset(redisKey, 'phase', 'day');
+
+    // 필요에 따라 투표 배열 초기화 (예: firstVote, secondVote)
+    await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
+    await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
+  }
+
+  async processFirstVote(
+    roomId: string,
+    gameId: string,
+    votes: FirstVote[],
+    voteDeadline: Date, // 투표 마감 시각
+  ): Promise<number> {
+    // 1. 현재 게임 데이터를 조회하여 전체 플레이어 목록을 가져옵니다.
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 살아있는 플레이어만 필터링
+    const alivePlayers = players.filter((player) => player.isAlive);
+    const totalAlive = alivePlayers.length;
+
+    // 2. 하이브리드 조건: 아직 투표가 완료되지 않았다면 (투표 수가 살아있는 플레이어 수보다 적고, 시간이 남아있으면)
+    if (votes.length < totalAlive && new Date() < voteDeadline) {
+      throw new BadRequestException('1차 투표가 아직 완료되지 않았습니다.');
+    }
+
+    // 3. 투표 집계: 각 대상(targetId)에 대해 몇 표를 받았는지 계산합니다.
+    const voteCount = new Map<number, number>();
+    votes.forEach(({ targetId }) => {
+      voteCount.set(targetId, (voteCount.get(targetId) || 0) + 1);
+    });
+
+    // 4. 최다 득표 대상 결정
+    let maxVotes = 0;
+    let targetToVote: number | null = null;
+    voteCount.forEach((count, targetId) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        targetToVote = targetId;
+      }
+    });
+
+    if (targetToVote === null) {
+      throw new BadRequestException('1차 투표 결과가 유효하지 않습니다.');
+    }
+
+    // 5. 최다 득표 대상의 ID 반환
+    return targetToVote;
   }
 }
