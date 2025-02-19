@@ -15,6 +15,7 @@ import { RoomService } from './room.service';
 })
 export class RoomGateway implements OnGatewayDisconnect {
   @WebSocketServer()
+  // socket.io 서버 인스턴스 주입
   server: Server;
 
   constructor(
@@ -22,6 +23,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     private readonly roomService: RoomService,
   ) {}
   // @SubscribeMessage 데코레이터로 클라이언트에서 발행한 특정 이벤트를 구독할 수 있다.
+  // >> 클라이언트가 chatMessage 이벤트를 발행하면, 이 데코레이터가 이벤트를 구독하여 내부 로직 실행
   @SubscribeMessage('chatMessage')
   handleChatMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
@@ -34,7 +36,8 @@ export class RoomGateway implements OnGatewayDisconnect {
     });
   }
 
-  // joinRoom 이벤트: 룸 서비스의 joinRoom() 호출 >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)
+  // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
+  // >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(
     @MessageBody() data: { roomId: string; userId: number },
