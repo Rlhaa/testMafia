@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile # 루트에 있는 애플리케이션 Dockerfile 사용
+    ports:
+      - '3000:3000'
+    environment:
+      REDIS_HOST: redis # 애플리케이션 내부에서 사용 (redis.provider.ts 참고)
+      REDIS_PORT: 6379
+    depends_on:
+      - redis
+
+  redis:
+    build:
+      context: ./src/redis # src 안의 redis 폴더를 빌드 컨텍스트로 지정
+      dockerfile: Dockerfile
+    ports:
+      - '6379:6379'
