@@ -9,6 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { GameService, FirstVote } from '../game/game.service';
 import { RoomService } from './room.service';
+import { BadRequestException } from '@nestjs/common';
 
 export interface Player {
   id: number;
@@ -42,6 +43,31 @@ export class RoomGateway implements OnGatewayDisconnect {
     });
   }
 
+  //발신인 검증, 함수화 가능
+  //나중에 생각하자
+  // async getSpeakerInfo(@MessageBody() data: { roomId: string; userId: number; message: string },
+  // @ConnectedSocket() client: Socket,) {
+  //   // 방의 플레이어 정보를 가져옵니다.
+  //   const currentGId = await this.gameService.getCurrentGameId(data.roomId);
+  //   if (!currentGId) {
+  //     throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+  //   }
+  //   const gameData = await this.gameService.getGameData(
+  //     data.roomId,
+  //     currentGId,
+  //   );
+  //   const players: Player[] = gameData.players
+  //     ? JSON.parse(gameData.players)
+  //     : [];
+
+  //   // 메시지를 보낸 사용자의 정보를 찾습니다.
+  //   const sender = players.find((player) => player.id === data.userId);
+
+  //   if (!sender) {
+  //     client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
+  //     return;
+  //   }
+  // }
   //
   //
   @SubscribeMessage('chatDead')
@@ -49,14 +75,26 @@ export class RoomGateway implements OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
-    // 해당 방의 게임 데이터 가져오기
-    const roomData = await this.roomService.getRoomInfo(data.roomId);
+    // 방의 플레이어 정보를 가져옵니다.
+    const currentGId = await this.gameService.getCurrentGameId(data.roomId);
+    if (!currentGId) {
+      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+    }
+    const gameData = await this.gameService.getGameData(
+      data.roomId,
+      currentGId,
+    );
+    const players: Player[] = gameData.players;
+    // ? JSON.parse(gameData.players)
+    // : [];
 
-    // players가 JSON 문자열일 경우 파싱
-    const players: Player[] =
-      typeof roomData.players === 'string'
-        ? JSON.parse(roomData.players)
-        : roomData.players;
+    // 메시지를 보낸 사용자의 정보를 찾습니다.
+    const sender = players.find((player) => player.id === data.userId);
+
+    if (!sender) {
+      client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
+      return;
+    }
 
     // 죽은 플레이어만 필터링
     const deadPlayers = players.filter((player) => player.isAlive === false);
@@ -70,24 +108,48 @@ export class RoomGateway implements OnGatewayDisconnect {
     });
   }
 
-  // @SubscribeMessage('chatMafia')
-  // async handleChatMeesage(
-  //   @MessageBody() data: { roomId: string; userId: number; message: string },
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   const { roomId } = await this.roomService.getRoomInfo(data.roomId);
-  //   // 해당 방의 모든 플레이어를 가져옵니다.
-  //   // 마피아인 플레이어만 필터링합니다.
-  //   const mafias = this.gameService.getMafias(data.roomId, roomId);
+  @SubscribeMessage('chatMafia')
+  async handleMafiaMeesage(
+    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      // 방의 플레이어 정보를 가져옵니다.
+      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!currentGId) {
+        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+      }
 
-  //   // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
-  //   mafias.forEach((mafia) => {
-  //     this.server.to(mafia.userId.toString()).emit('CHAT:MAFIA', {
-  //       sender: data.userId,
-  //       message: data.message,
-  //     });
-  //   });
-  // }
+      const gameData = await this.gameService.getGameData(
+        data.roomId,
+        currentGId,
+      );
+      const players: Player[] = gameData.players;
+
+      // 메시지를 보낸 사용자의 정보를 찾습니다.
+      const sender = players.find((player) => player.id === data.userId);
+      if (!sender) {
+        client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
+        return;
+      }
+
+      // 마피아인 플레이어만 필터링합니다.
+      const mafias = await this.gameService.getMafias(data.roomId, currentGId);
+
+      // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
+      mafias.forEach((mafia) => {
+        console.log(data.roomId);
+        console.log('-----------', mafia.id);
+        this.server.to(mafia.id.toString()).emit('CHAT:MAFIA', {
+          sender: data.userId,
+          message: data.message,
+        });
+      });
+    } catch (error) {
+      console.error('handleMafiaMessage Error:', error);
+      client.emit('error', { message: '마피아 메시지 처리 중 오류 발생.' });
+    }
+  }
 
   // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
   // >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)

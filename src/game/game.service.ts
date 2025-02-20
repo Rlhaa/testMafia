@@ -171,19 +171,6 @@ export class GameService {
     return updatedPlayers; // 역할 분배 완료된 플레이어 배열 반환
   }
 
-  //getMafias
-  //마피아를 배정받은 사람들을 구합니다.
-  //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
-  async getMafias(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 마피아인 플레이어만 필터링합니다.
-    const mafias = players.filter((player) => player.role === 'mafia');
-
-    return mafias;
-  }
-
   //  5. 낮 시작 단계
   //  게임의 낮 단계를 시작하고 투표를 초기화
   async startDayPhase(roomId: string, gameId: string): Promise<number> {
@@ -317,6 +304,48 @@ export class GameService {
       winnerId: candidates.length === 1 ? candidates[0] : null,
       voteCount: maxVotes,
     };
+  }
+
+  //n. 밤 시작
+  //2차례의 투표 종료 후 15초간 밤이 됩니다.
+  //마피아는 의논 후에 사살 대상을 선택할 수 있고
+  //의사는 살릴 사람을 선택할 수 있고
+  //경찰은 조사 대상을 선택할 수 있습니다.
+  //getMafias
+  //마피아를 배정받은 사람들을 구합니다.
+  //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
+  async startNightPhase(roomId: string, gameId: string): Promise<number> {
+    // 들어온 인자로 레디스 키 구성
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    // 현재 게임 데이터를 get
+    const gameData = await this.getGameData(roomId, gameId);
+
+    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
+    let currentDay = parseInt(gameData.day, 10) || 0;
+    await this.redisClient.hset(redisKey, 'phase', 'night');
+    return currentDay;
+  }
+
+  //수신자: 시체
+  async getGhosts(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 죽은 플레이어만 필터링
+    const deadPlayers = players.filter((player) => player.isAlive === false);
+
+    return deadPlayers;
+  }
+
+  //수신자: 마피아
+  async getMafias(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 마피아인 플레이어만 필터링합니다.
+    const mafias = players.filter((player) => player.role === 'mafia');
+
+    return mafias;
   }
 
   // async endGame(roomId: string): Promise<void> {

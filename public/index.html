@@ -178,6 +178,14 @@
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
 
+          socket.on('CHAT:DEAD', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
+
+          socket.on('CHAT:MAFIA', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
+
           document
             .getElementById('sendBtn')
             .addEventListener('click', sendChatMessage);
@@ -320,13 +328,21 @@
         var messageInputElem = document.getElementById('messageInput');
         var message = messageInputElem ? messageInputElem.value : '';
         if (message.trim() === '') return;
-
-        socket.emit('chatMessage', {
-          roomId: roomId,
-          userId: currentUserId,
-          message: message,
-        });
-
+        console.log(currentUserRole);
+        if (currentUserRole === 'mafia') {
+          console.log('마피아 당첨');
+          socket.emit('chatMafia', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+        } else {
+          socket.emit('chatMessage', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+        }
         if (messageInputElem) {
           messageInputElem.value = '';
         }
