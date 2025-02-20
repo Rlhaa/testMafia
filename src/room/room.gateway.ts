@@ -77,26 +77,38 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      // GameService의 메서드 호출하여 처리
       const result = await this.gameService.handleFirstVoteProcess(
         data.roomId,
         data.voterId,
         data.targetId,
       );
+      console.log('handleFirstVote 결과:', result);
 
       if (result.success) {
-        // 모든 클라이언트에게 실시간 투표 현황 업데이트
         this.server.to(data.roomId).emit('UPDATE_VOTES', result.voteData);
+        console.log('투표 업데이트 전송 - roomId:', data.roomId);
 
-        // 모든 투표가 완료된 경우, 최종 투표 결과를 전송
         if (result.allVotesCompleted) {
-          this.server.to(data.roomId).emit('VOTE:RESULT', result.finalResult);
+          console.log('모든 플레이어가 투표 완료됨 - roomId:', data.roomId);
+          this.server.to(data.roomId).emit('VOTE:COMPLETE', {
+            message: '모든 플레이어가 투표를 완료했습니다.',
+          });
+
+          const finalResult = await this.gameService.calculateVoteResult(
+            data.roomId,
+          );
+
+          console.log('투표 결과 계산 완료:', finalResult);
+          console.log(
+            `VOTE:RESULT 이벤트 전송 - roomId: ${data.roomId}, result:`,
+            finalResult,
+          );
+
+          this.server.to(data.roomId).emit('VOTE:RESULT', finalResult);
         }
-      } else {
-        client.emit('voteError', '이미 투표한 상태입니다.');
       }
     } catch (error) {
-      console.error('handleFirstVote Error:', error);
+      console.error('handleFirstVote 에러 발생:', error);
       client.emit('voteError', '투표 처리 중 오류 발생.');
     }
   }

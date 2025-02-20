@@ -197,6 +197,7 @@ export class GameService {
     return currentDay;
   }
 
+  // 1차 투표 진행
   async handleFirstVoteProcess(
     roomId: string,
     voterId: number,
@@ -208,76 +209,80 @@ export class GameService {
 
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
-      console.error(`room:${roomId}:currentGameId 키를 찾을 수 없습니다.`);
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
 
-    console.log(`현재 진행 중인 게임 ID: ${gameId}`);
-
-    //  자기 자신에게 투표하는 것 방지
-    if (voterId === targetId) {
-      console.warn(`사용자 ${voterId}가 자기 자신에게 투표하려고 시도함.`);
-      return { success: false, message: '자기 자신에게는 투표할 수 없습니다.' };
-    }
-
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
+    const gameKey = `room:${roomId}:game:${gameId}`;
+
+    // 현재 투표 데이터 가져오기
     const votes = await this.redisClient.get(firstVoteKey);
     let voteArray: { voterId: number; targetId: number }[] = votes
       ? JSON.parse(votes)
       : [];
 
-    //  중복 투표 방지
-    if (voteArray.some((vote) => vote.voterId === voterId)) {
-      return { success: false, message: '이미 투표하셨습니다.' };
-    }
-
-    //  투표 정보 추가
-    voteArray.push({ voterId, targetId });
-    await this.redisClient.set(firstVoteKey, JSON.stringify(voteArray));
-
-    //  현재 투표 현황 조회
-    const playersData = await this.redisClient.get(
-      `room:${roomId}:game:${gameId}:players`,
-    );
-    const players = playersData ? JSON.parse(playersData) : [];
-    const alivePlayers = players.filter((player: any) => player.isAlive).length;
-
-    //  모든 플레이어가 투표 완료했는지 확인
-    let finalResult: { winnerId: number | null; voteCount: number } = {
-      winnerId: null,
-      voteCount: 0,
-    };
-    let allVotesCompleted = false;
-    if (voteArray.length === alivePlayers) {
-      allVotesCompleted = true;
-      finalResult = (await this.calculateVoteResult(roomId)) || {
-        winnerId: null,
-        voteCount: 0,
+    // 자기 자신에게 투표 방지
+    if (voterId === targetId) {
+      console.warn(`사용자 ${voterId}가 자기 자신에게 투표하려고 시도함.`);
+      return {
+        success: false,
+        message: '자기 자신에게는 투표할 수 없습니다.',
       };
     }
 
+    // 중복 투표 방지
+    if (voteArray.some((vote) => vote.voterId === voterId)) {
+      console.log('중복된 투표 감지(반영X)');
+      return {
+        success: false,
+        message: '이미 투표하셨습니다. 다시 투표할 수 없습니다.',
+      };
+    }
+
+    // 생존한 플레이어 수 확인 (Redis에서 가져오기)
+    const gameData = await this.redisClient.hget(gameKey, 'players');
+    const alivePlayers = JSON.parse(gameData as string).filter(
+      (p: any) => p.isAlive,
+    );
+
+    // 투표 정보 저장 (검증 후)
+    voteArray.push({ voterId, targetId });
+    await this.redisClient.set(firstVoteKey, JSON.stringify(voteArray));
+
+    // 현재 투표한 인원 수 / 투표 가능한 인원 수 로그 출력
+    console.log(
+      `현재 투표한 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
+    );
+
+    // 모든 생존 플레이어가 투표 완료될 때까지 반환하지 않음
+    if (voteArray.length !== alivePlayers.length) {
+      return {
+        success: true,
+        voteData: voteArray,
+        allVotesCompleted: false, // 아직 모든 투표가 완료되지 않음
+      };
+    }
+
+    // 모든 생존 플레이어가 투표 완료되었을 경우에만 반환
     return {
       success: true,
       voteData: voteArray,
-      allVotesCompleted,
-      finalResult,
+      allVotesCompleted: true, // 모든 투표가 완료됨
     };
   }
 
   // 1차 투표 결과 집계
-  async calculateVoteResult(
-    roomId: string,
-  ): Promise<{ winnerId: number | null; voteCount: number }> {
-    const gameId = await this.redisClient.get(`room:${roomId}:currentGameId`);
+  async calculateVoteResult(roomId: string) {
+    console.log(`calculateVoteResult 실행 - roomId: ${roomId}`);
+    const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
 
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
-
     const votes = await this.redisClient.get(firstVoteKey);
     if (!votes) {
-      return { winnerId: null, voteCount: 0 }; // 기본값 반환
+      return { winnerId: null, voteCount: 0 };
     }
 
     const voteArray: { voterId: number; targetId: number }[] =
@@ -288,7 +293,9 @@ export class GameService {
       voteCount[vote.targetId] = (voteCount[vote.targetId] || 0) + 1;
     });
 
-    // 최다 득표자 판별
+    console.log(`투표 집계 결과:`, voteCount);
+
+    // 최다 득표자 확인
     let maxVotes = 0;
     let candidates: number[] = [];
     Object.entries(voteCount).forEach(([targetId, count]) => {
@@ -299,6 +306,10 @@ export class GameService {
         candidates.push(Number(targetId));
       }
     });
+
+    console.log(
+      `최다 득표자 확인 - winnerId: ${candidates.length === 1 ? candidates[0] : null}`,
+    );
 
     return {
       winnerId: candidates.length === 1 ? candidates[0] : null,
