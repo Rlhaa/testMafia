@@ -70,4 +70,34 @@ export class RoomGateway implements OnGatewayDisconnect {
     const userId = client.handshake.auth.userId as number;
     await this.roomService.leaveRoom(this.server, client, roomId, userId);
   }
+
+  @SubscribeMessage('VOTE:PLAYER')
+  async handleFirstVote(
+    @MessageBody() data: { roomId: string; voterId: number; targetId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      // GameService의 메서드 호출하여 처리
+      const result = await this.gameService.handleFirstVoteProcess(
+        data.roomId,
+        data.voterId,
+        data.targetId,
+      );
+
+      if (result.success) {
+        // 모든 클라이언트에게 실시간 투표 현황 업데이트
+        this.server.to(data.roomId).emit('UPDATE_VOTES', result.voteData);
+
+        // 모든 투표가 완료된 경우, 최종 투표 결과를 전송
+        if (result.allVotesCompleted) {
+          this.server.to(data.roomId).emit('VOTE:RESULT', result.finalResult);
+        }
+      } else {
+        client.emit('voteError', '이미 투표한 상태입니다.');
+      }
+    } catch (error) {
+      console.error('handleFirstVote Error:', error);
+      client.emit('voteError', '투표 처리 중 오류 발생.');
+    }
+  }
 }

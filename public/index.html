@@ -50,6 +50,7 @@
         .occupant-btn {
             cursor: pointer;
             transition: background-color 0.3s;
+            height: 65px;
         }
 
         .occupant-btn.selected {
@@ -73,6 +74,15 @@
             padding: 8px 12px;
             font-size: 16px;
             cursor: pointer;
+        }
+
+        .disabled-btn {
+            opacity: 0.5;
+            /* 흐려지게 만들기 */
+            pointer-events: none;
+            /* 클릭 불가능하게 */
+            cursor: not-allowed;
+            /* 마우스를 올렸을 때 '금지' 커서 표시 */
         }
     </style>
 </head>
@@ -120,7 +130,6 @@
         var socket;      // 단일 소켓
         var roomInfo;    // ROOM:JOINED 또는 ROOM:UPDATED 이벤트로 최신 방 정보 수신
         var selectedTargetId = null; // 투표 대상으로 선택된 플레이어의 ID
-
         document.getElementById("loginBtn").addEventListener("click", function () {
             var userIdInput = document.getElementById("userId").value;
             if (!userIdInput) {
@@ -129,43 +138,36 @@
             }
             currentUserId = Number(userIdInput);
 
-            // 단일 소켓 생성 (auth 옵션 사용)
+            //  단일 소켓 생성 (auth 옵션 사용)
             socket = io("http://localhost:3000/room", {
                 auth: { roomId: roomId, userId: currentUserId }
             });
 
-            // UI 표시
+            //  UI 표시
             document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
             document.getElementById("voteContainer").style.display = "block";
 
-            // 방 입장 요청
+            //  방 입장 요청
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
 
-            // ROOM:JOINED 이벤트 (초기 방 정보)
             socket.once("ROOM:JOINED", function (data) {
                 roomInfo = data;
-                console.log("방 정보 (JOINED):", roomInfo);
                 updateOccupantList(roomInfo);
             });
 
-            // ROOM:UPDATED 이벤트 (실시간 방 정보 업데이트)
             socket.on("ROOM:UPDATED", function (data) {
                 roomInfo = data;
-                console.log("방 정보 (UPDATED):", roomInfo);
                 updateOccupantList(roomInfo);
             });
 
-            // 채팅 메시지 수신
             socket.on("message", function (data) {
                 appendChatMessage("[" + data.sender + "] " + data.message);
             });
 
             document.getElementById("sendBtn").addEventListener("click", sendChatMessage);
 
-            // 게임 이벤트 YOUR_ROLE 수신
             socket.on("YOUR_ROLE", function (data) {
-                console.log("YOUR_ROLE 이벤트 수신:", data);
                 appendChatMessage(data.message, true);
             });
 
@@ -173,29 +175,106 @@
                 alert("게임 에러: " + data.message);
             });
 
-            // 투표 확정 버튼 클릭 이벤트
+            //  투표 확정 버튼 클릭 이벤트 (여기서 정상적으로 등록)
             document.getElementById("voteBtn").addEventListener("click", function () {
                 if (!selectedTargetId) {
                     alert("투표할 대상을 선택하세요.");
                     return;
                 }
-                // 여기서 모든 사용자가 투표 확정을 했다는 조건은 클라이언트 단에서 
-                // 별도로 체크해야 합니다. 예를 들어, 각 사용자가 투표를 완료했다는 표시를 
-                // 저장하는 배열을 관리하고, 그 배열의 길이가 접속 인원 수와 같을 때만 이벤트 발행.
-                // 아래는 간단한 예시입니다.
-                var allVoted = true; // 이 변수는 실제로 각 사용자가 투표 완료했는지 상태를 확인하여 업데이트되어야 합니다.
-                if (!allVoted) {
-                    alert("모든 사용자가 투표를 확정하지 않았습니다.");
-                    return;
-                }
+
+                console.log(`투표 요청: ${currentUserId} → ${selectedTargetId}`);
+
+                //  서버에 투표 정보 전송
                 socket.emit("VOTE:PLAYER", {
                     roomId: roomId,
                     voterId: currentUserId,
-                    targetId: Number(selectedTargetId)
+                    targetId: Number(selectedTargetId) // 숫자로 변환
                 });
+
+                // 버튼을 흐리게 만들고 비활성화
+                document.getElementById("voteBtn").classList.add("disabled-btn");
+
                 clearSelection();
             });
+
+            socket.on("UPDATE_VOTES", function (voteData) {
+                updateVoteUI(voteData);
+            });
+
+            socket.on("VOTE:RESULT", function (resultData) {
+                displayVoteResult(resultData);
+            });
+
         });
+
+        // SECONDVOTE 단계가 시작되면 버튼 다시 활성화
+        socket.on("SECONDVOTE_START", function () {
+            console.log("SECONDVOTE 단계 시작. 투표 버튼 활성화.");
+            document.getElementById("voteBtn").classList.remove("disabled-btn");
+        });
+
+        //  유저 목록에서 클릭한 플레이어를 선택하는 함수
+        function updateOccupantList(roomData) {
+            var occupantListDiv = document.getElementById("occupantList");
+            occupantListDiv.innerHTML = "";
+            var players = [];
+            try {
+                players = typeof roomData.players === "string" ? JSON.parse(roomData.players) : roomData.players;
+            } catch (error) {
+                players = [];
+            }
+            players.forEach(function (player) {
+                var btn = document.createElement("button");
+                btn.className = "btn btn-outline-primary occupant-btn";
+                btn.textContent = "사용자 " + player.id;
+                btn.dataset.userid = player.id;
+
+                btn.addEventListener("click", function () {
+                    if (player.id === currentUserId) {
+                        alert("자기 자신에게는 투표할 수 없습니다.");
+                        return;
+                    }
+
+                    document.querySelectorAll(".occupant-btn").forEach((b) => b.classList.remove("selected"));
+
+                    btn.classList.add("selected");
+                    selectedTargetId = Number(btn.dataset.userid); // 숫자로 변환
+                    console.log(`선택된 유저: ${selectedTargetId}`);
+                });
+
+                occupantListDiv.appendChild(btn);
+            });
+        }
+
+        //  선택 해제 함수
+        function clearSelection() {
+            document.querySelectorAll(".occupant-btn").forEach((b) => b.classList.remove("selected"));
+            selectedTargetId = null;
+        }
+
+        //  투표 현황을 UI에 업데이트하는 함수
+        function updateVoteUI(voteData) {
+            const voteListElement = document.getElementById("voteList");
+            if (!voteListElement) return;
+
+            voteListElement.innerHTML = "";
+            voteData.forEach(vote => {
+                const listItem = document.createElement("li");
+                listItem.textContent = `사용자 ${vote.voterId} → 사용자 ${vote.targetId}에게 투표`;
+                voteListElement.appendChild(listItem);
+            });
+
+            if (voteData.length >= totalPlayers) {
+                document.getElementById("voteStatus").textContent = "모든 사용자가 투표 완료";
+            } else {
+                document.getElementById("voteStatus").textContent = `현재 투표 진행 중 (${voteData.length}/${totalPlayers})`;
+            }
+        }
+
+        //  투표 결과를 UI에 표시하는 함수
+        function displayVoteResult(resultData) {
+            alert(`최다 득표자: 사용자 ${resultData.winnerId} (${resultData.voteCount}표)`);
+        }
 
         // 채팅 메시지 추가 함수
         function appendChatMessage(message, isRole) {
