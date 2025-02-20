@@ -100,4 +100,18 @@ export class RoomGateway implements OnGatewayDisconnect {
       client.emit('voteError', '투표 처리 중 오류 발생.');
     }
   }
+
+  /**
+   * 클라이언트에게 메시지를 브로드캐스트하는 유틸리티 함수
+   * (서비스에서 호출하여 공지를 전파할 때 사용)
+   */
+  broadcastNotice(
+    roomId: string,
+    type: string,
+    message: string,
+    additionalData?: Record<string, any>,
+  ) {
+    const payload = { roomId, type, message, ...additionalData };
+    this.server.to(roomId).emit('ROOM:NIGHT_RESULT', payload);
+  }
 }
