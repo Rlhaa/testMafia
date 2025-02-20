@@ -111,6 +111,9 @@ export class RoomService {
     await this.redisClient.hset(redisKey, 'players', JSON.stringify(players));
   }
 
+  // getPlayersInRoom: 방 안의 플레이어를
+  async getPlayersInRoom(roomId: string): Promise<void> {}
+
   // addPlayer: 새로운 플레이어를 추가 (최대 8명, 중복 추가 방지)
   async addPlayer(roomId: string, newPlayer: Player): Promise<Player[]> {
     // getRoomInfo 메서드가 roomId로 방 정보를 조회 후 객체로 반환
