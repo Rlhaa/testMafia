@@ -110,7 +110,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   }
 
   @SubscribeMessage('chatMafia')
-  async handleMafiaMeesage(
+  async handleMafiaMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
   ) {
@@ -140,8 +140,14 @@ export class RoomGateway implements OnGatewayDisconnect {
       // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
       mafias.forEach((mafia) => {
         const mafiaPlayer = players.find((player) => player.id === mafia.id);
-        if (mafiaPlayer && mafiaPlayer.socketId) {
+        if (gameData.phase === 'night' && mafiaPlayer && mafiaPlayer.socketId) {
           this.server.to(mafiaPlayer.socketId).emit('CHAT:MAFIA', {
+            sender: data.userId,
+            message: data.message,
+          });
+        } else {
+          // 채팅 메시지를 해당 방의 모든 클라이언트에게 브로드캐스트
+          this.server.to(data.roomId).emit('message', {
             sender: data.userId,
             message: data.message,
           });
