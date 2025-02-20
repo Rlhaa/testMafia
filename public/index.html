@@ -127,6 +127,10 @@
     <div id="gameSection" style="display: none; margin-top: 20px">
       <h2>게임 상태</h2>
       <div id="gameStatus"></div>
+      <!-- 테스트용 버튼 추가 -->
+      <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
+        게임 단계: 밤으로 전환
+      </button>
     </div>
 
     <script>
@@ -230,6 +234,13 @@
           socket.on('VOTE:RESULT', function (resultData) {
             displayVoteResult(resultData);
           });
+
+          // 게임 단계 전환 버튼 클릭 이벤트
+          document
+            .getElementById('setNightPhaseBtn')
+            .addEventListener('click', function () {
+              socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
+            });
         });
 
       // SECONDVOTE 단계가 시작되면 버튼 다시 활성화
@@ -328,9 +339,7 @@
         var messageInputElem = document.getElementById('messageInput');
         var message = messageInputElem ? messageInputElem.value : '';
         if (message.trim() === '') return;
-        console.log(currentUserRole);
         if (currentUserRole === 'mafia') {
-          console.log('마피아 당첨');
           socket.emit('chatMafia', {
             roomId: roomId,
             userId: currentUserId,
