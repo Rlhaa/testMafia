@@ -2,11 +2,28 @@ import { Injectable, BadRequestException, Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 
+// 투표, 플레이어 인터페이스 정의
+export interface FirstVote {
+  voterId: number;
+  targetId: number; // 투표 대상의 ID
+}
+
+export interface SecondVote {
+  voterId: number;
+  execute: boolean; // true: 대상 실행, false: 대상 생존 선택
+}
+
+export interface Player {
+  id: number;
+  role?: string;
+  isAlive?: boolean;
+}
+
 @Injectable()
 export class GameService {
   constructor(
     @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis, // Redis 클라이언트 주입
+    private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
   ) {}
 
   // createGame
@@ -18,8 +35,8 @@ export class GameService {
     }
     const gameId = uuidv4(); // 고유 게임 ID 생성
     const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    // console.log('Game ID:', gameId);
-    // console.log('Redis Key:', redisKey);
+    console.log('Game ID:', gameId);
+    console.log('Redis Key:', redisKey);
 
     // 방에 저장된 플레이어 목록 가져오기
     const roomPlayersData = await this.redisClient.hget(
@@ -27,8 +44,7 @@ export class GameService {
       'players',
     );
 
-    // 플레이어 빈 배열 생성ㅇ 후
-    let players = [];
+    let players: Player[] = [];
     if (roomPlayersData) {
       try {
         // 저장된 플레이어 목록을 JSON으로 파싱
@@ -40,7 +56,7 @@ export class GameService {
 
     // 초기 게임 상태 구성
     const initialGameState = {
-      day: '1',
+      day: '0',
       phase: 'morning',
       mafiaCount: '2',
       citizenCount: '6',
@@ -50,45 +66,41 @@ export class GameService {
       players: JSON.stringify(players), // 이전에 파싱한 플레이어 목록 반영
     };
 
-    // 첫 시작 단계에서의 정보 레디스에 저장
-    await this.redisClient.hmset(redisKey, initialGameState); // 초기 상태 저장
+    // 각 필드를 개별적으로 저장 (hset(key, field, value))
+    await Promise.all(
+      Object.entries(initialGameState).map(([field, value]) =>
+        this.redisClient.hset(redisKey, field, value),
+      ),
+    );
+
     return gameId; // 게임 ID 반환
   }
 
   // getGameData
   // - Redis에서 게임 데이터를 조회하고, JSON 파싱된 플레이어 목록을 반환합니다.
   async getGameData(roomId: string, gameId: string): Promise<any> {
-    // 인자 예외 처리
     if (!roomId || !gameId) {
       throw new BadRequestException('roomId와 gameId가 필요합니다.');
     }
-    // 들어온 인자로 redis key 구성 후
     const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    // 레디스 서버에 해당 키의 게임이 존재하는지 조회
-    const gameData = await this.redisClient.hgetall(redisKey); // 게임 데이터 조회
-    // 없을 때 예외처리
-    if (!gameData || Object.keys(gameData).length === 0) {
+    const gameData = (await this.redisClient.hgetall(redisKey)) || {};
+    if (Object.keys(gameData).length === 0) {
       throw new BadRequestException('해당 게임 데이터가 존재하지 않습니다.');
     }
-    // players 필드에 JSON 파싱을 수행하여 배열로 변환
+    // players 필드를 JSON 파싱하여 배열로 변환
     gameData.players = gameData.players ? JSON.parse(gameData.players) : [];
-    // 게임 데이터 반환
     return gameData;
   }
 
   // assignRoles
   // - 방의 플레이어 수가 8명인지 확인한 후, 고정 역할 풀을 무작위로 섞어 각 플레이어에게 역할을 할당합니다.
   // - 역할 분배가 완료되면 업데이트된 플레이어 목록과 게임 phase 정보를 Redis에 저장하고, 업데이트된 배열을 반환합니다.
-  async assignRoles(roomId: string, gameId: string): Promise<any> {
-    // 들어온 인자로 redis key 구성 후
+  async assignRoles(roomId: string, gameId: string): Promise<Player[]> {
     const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    // getGameData 메서드를 통해 현재 게임 정보 조회
     const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    // 메서드에서 반환된 게임 정보 중 players 배열을 players에 할당
-    const players = gameData.players;
+    const players: Player[] = gameData.players;
     const requiredPlayers = 8;
     console.log('플레이어 수:', players.length);
-    // players와 requiredPlayers 비교
     if (players.length !== requiredPlayers) {
       throw new BadRequestException(
         '플레이어 수가 8인이 아니므로 역할 분배를 진행할 수 없습니다.',
@@ -108,26 +120,51 @@ export class GameService {
     ];
     rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
 
-    // 각 플레이어 객체와 해당 객체의 인덱스가 콜백 함수의 매개변수로 전달
     const updatedPlayers = players.map((player, index) => ({
-      // 콜백함수 내부
-      // 스프레드 연산자로 객체 전개하여 새로운 객체 배열 생성
-      ...player,
-      // 그 객체에 할당 >> 모든 플렝이어에서 무작위로 섞은 직업이 분배
+      ...player, // 기존 플레이어 데이터 전개
       role: rolesPool[index], // 역할 할당
       isAlive: true, // 초기 생존 상태 true 설정
     }));
-    // console.log('Updated Players:', updatedPlayers);
+    console.log('Updated Players:', updatedPlayers);
 
-    // 역할 부여 후 redis에 업데이트
-    await this.redisClient.hset(
-      redisKey,
-      'players',
-      JSON.stringify(updatedPlayers),
-    ); // 업데이트된 플레이어 목록 저장
-    // 게임 페이즈 업데이트
-    await this.redisClient.hset(redisKey, 'phase', 'rolesAssigned'); // 게임 phase 업데이트
+    // 각 필드를 개별적으로 저장
+    await Promise.all([
+      this.redisClient.hset(
+        redisKey,
+        'players',
+        JSON.stringify(updatedPlayers),
+      ),
+      this.redisClient.hset(redisKey, 'phase', 'rolesAssigned'),
+    ]);
 
-    return updatedPlayers; // 업데이트된 배열 반환
+    return updatedPlayers; // 업데이트된 플레이어 배열 반환
+  }
+
+  // processFirstVote
+  // - 1차 투표를 처리합니다.
+  // - 모든 살아있는 플레이어가 투표했거나, 투표 마감 시간이 지난 경우 최다 득표 대상을 반환합니다.
+
+  async startDayPhase(roomId: string, gameId: string): Promise<number> {
+    // 들어온 인자로 레디스 키 구성
+    const redisKey = `room:${roomId}:game:${gameId}`;
+
+    // 현재 게임 데이터를 get
+    const gameData = await this.getGameData(roomId, gameId);
+
+    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
+    let currentDay = parseInt(gameData.day, 10) || 0;
+
+    // day 값을 1 증가
+    currentDay += 1;
+
+    // 게임 상태 업데이트: 새로운 day와 낮 단계("day")로 설정
+    await this.redisClient.hset(redisKey, 'day', currentDay.toString());
+    await this.redisClient.hset(redisKey, 'phase', 'day');
+
+    // 필요에 따라 투표 배열 초기화 (예: firstVote, secondVote)
+    await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
+    await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
+
+    return currentDay;
   }
 }

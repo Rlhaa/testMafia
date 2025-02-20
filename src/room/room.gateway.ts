@@ -7,8 +7,14 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { GameService } from '../game/game.service';
+import { GameService, FirstVote } from '../game/game.service';
 import { RoomService } from './room.service';
+
+export interface Player {
+  id: number;
+  role?: string;
+  isAlive: boolean;
+}
 
 @WebSocketGateway({
   namespace: 'room', // 현재 단계에서 네임스페이스를 구성할 필요가 크진 않지만, 일단 이렇게 따로 웹소켓 통신 공간을 지정 가능
@@ -38,6 +44,32 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   //
   //
+  @SubscribeMessage('chatDead')
+  async handleChatDead(
+    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    // 해당 방의 게임 데이터 가져오기
+    const roomData = await this.roomService.getRoomInfo(data.roomId);
+
+    // players가 JSON 문자열일 경우 파싱
+    const players: Player[] =
+      typeof roomData.players === 'string'
+        ? JSON.parse(roomData.players)
+        : roomData.players;
+
+    // 죽은 플레이어만 필터링
+    const deadPlayers = players.filter((player) => player.isAlive === false);
+
+    // 죽은 플레이어에게만 메시지 전송
+    deadPlayers.forEach((deadPlayer) => {
+      this.server.to(deadPlayer.id.toString()).emit('CHAT:DEAD', {
+        sender: data.userId,
+        message: data.message,
+      });
+    });
+  }
+
   // @SubscribeMessage('chatMafia')
   // async handleChatMeesage(
   //   @MessageBody() data: { roomId: string; userId: number; message: string },

@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>룸 채팅 및 게임 테스트</title>
+    <!-- 부트스트랩 CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
     <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
     <style>
         body {
@@ -11,8 +13,8 @@
             margin: 20px;
         }
 
-        /* 전체 컨테이너: 채팅과 방 인원 목록을 좌우로 배치 (7:3 비율) */
-        .container {
+        /* 전체 컨테이너: 채팅과 접속 인원 영역 좌우 배치 (7:3 비율) */
+        .container-custom {
             display: flex;
             gap: 10px;
         }
@@ -44,12 +46,15 @@
             gap: 5px;
         }
 
-        #occupantList div {
-            border: 1px solid #aaa;
-            padding: 5px;
-            text-align: center;
-            background-color: #fff;
-            height: 70px;
+        /* 부트스트랩 버튼 사용, 선택되면 색상이 변함 */
+        .occupant-btn {
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .occupant-btn.selected {
+            background-color: #007bff;
+            color: white;
         }
 
         .system-message {
@@ -61,37 +66,50 @@
             color: blue;
             font-weight: bold;
         }
+
+        /* 투표 확정 버튼 */
+        #voteBtn {
+            margin-top: 10px;
+            padding: 8px 12px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
 </head>
 
 <body>
-    <h1>룸 채팅 테스트</h1>
+    <h1>룸 채팅 및 게임 테스트</h1>
     <!-- 사용자 ID 입력 -->
-    <div>
-        <label for="userId">사용자 ID: </label>
-        <input type="number" id="userId" placeholder="1">
-        <button id="loginBtn">로그인 (룸 입장)</button>
+    <div class="form-group">
+        <label for="userId">사용자 ID:</label>
+        <input type="number" id="userId" class="form-control" placeholder="1">
+        <button id="loginBtn" class="btn btn-primary mt-2">로그인 (룸 입장)</button>
     </div>
-    <!-- 전체 컨테이너 -->
-    <div class="container" id="mainContainer" style="display: none;">
+    <!-- 전체 컨테이너: 채팅과 접속 인원 영역 -->
+    <div class="container-custom" id="mainContainer" style="display: none;">
         <!-- 채팅 영역 -->
         <div class="chat-container" id="chatRoom">
             <h2 id="roomTitle"></h2>
             <div id="chatMessages"></div>
-            <input type="text" id="messageInput" placeholder="메시지를 입력하세요">
-            <button id="sendBtn">전송</button>
+            <input type="text" id="messageInput" class="form-control" placeholder="메시지를 입력하세요">
+            <button id="sendBtn" class="btn btn-secondary mt-2">전송</button>
         </div>
-        <!-- 방 접속 인원 영역 -->
+        <!-- 접속 인원 영역 -->
         <div class="occupant-container" id="roomOccupants">
             <h2>현재 접속 인원</h2>
             <div id="occupantList"></div>
         </div>
+    </div>
+    <!-- 투표 확정 버튼 (컨테이너 외부) -->
+    <div id="voteContainer" style="display: none; margin-top: 10px;">
+        <button id="voteBtn" class="btn btn-success">투표 확정</button>
     </div>
     <!-- 게임 상태 영역 -->
     <div id="gameSection" style="display: none; margin-top: 20px;">
         <h2>게임 상태</h2>
         <div id="gameStatus"></div>
     </div>
+
     <script>
         // 방 ID 추출 (예: http://localhost:3000/room/1)
         var pathSegments = window.location.pathname.split('/');
@@ -101,6 +119,7 @@
         var currentUserId;
         var socket;      // 단일 소켓
         var roomInfo;    // ROOM:JOINED 또는 ROOM:UPDATED 이벤트로 최신 방 정보 수신
+        var selectedTargetId = null; // 투표 대상으로 선택된 플레이어의 ID
 
         document.getElementById("loginBtn").addEventListener("click", function () {
             var userIdInput = document.getElementById("userId").value;
@@ -118,6 +137,7 @@
             // UI 표시
             document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
+            document.getElementById("voteContainer").style.display = "block";
 
             // 방 입장 요청
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
@@ -152,6 +172,29 @@
             socket.on("error", function (data) {
                 alert("게임 에러: " + data.message);
             });
+
+            // 투표 확정 버튼 클릭 이벤트
+            document.getElementById("voteBtn").addEventListener("click", function () {
+                if (!selectedTargetId) {
+                    alert("투표할 대상을 선택하세요.");
+                    return;
+                }
+                // 여기서 모든 사용자가 투표 확정을 했다는 조건은 클라이언트 단에서 
+                // 별도로 체크해야 합니다. 예를 들어, 각 사용자가 투표를 완료했다는 표시를 
+                // 저장하는 배열을 관리하고, 그 배열의 길이가 접속 인원 수와 같을 때만 이벤트 발행.
+                // 아래는 간단한 예시입니다.
+                var allVoted = true; // 이 변수는 실제로 각 사용자가 투표 완료했는지 상태를 확인하여 업데이트되어야 합니다.
+                if (!allVoted) {
+                    alert("모든 사용자가 투표를 확정하지 않았습니다.");
+                    return;
+                }
+                socket.emit("VOTE:PLAYER", {
+                    roomId: roomId,
+                    voterId: currentUserId,
+                    targetId: Number(selectedTargetId)
+                });
+                clearSelection();
+            });
         });
 
         // 채팅 메시지 추가 함수
@@ -159,7 +202,7 @@
             var chatMessagesDiv = document.getElementById("chatMessages");
             var messageElement = document.createElement("div");
             if (isRole) {
-                messageElement.className = "role-message";
+                messageElement.classList.add("role-message");
             }
             messageElement.textContent = message;
             chatMessagesDiv.appendChild(messageElement);
@@ -176,7 +219,7 @@
             }
         }
 
-        // 방 접속 인원 업데이트 함수
+        // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)
         function updateOccupantList(roomData) {
             var occupantListDiv = document.getElementById("occupantList");
             occupantListDiv.innerHTML = ""; // 기존 목록 초기화
@@ -186,12 +229,33 @@
             } catch (error) {
                 players = [];
             }
-            // 2열 그리드로 플레이어 목록 표시
             players.forEach(function (player) {
-                var item = document.createElement("div");
-                item.textContent = "사용자 " + player.id;
-                occupantListDiv.appendChild(item);
+                var btn = document.createElement("button");
+                btn.className = "btn btn-outline-primary occupant-btn";
+                btn.textContent = "사용자 " + player.id;
+                btn.dataset.userid = player.id; // data-userid 속성 저장
+                // 클릭 시 선택 상태 토글 (자신에게 투표 불가 조건은 별도로 처리)
+                btn.addEventListener("click", function () {
+                    // 모든 버튼에서 선택 해제
+                    var allBtns = document.querySelectorAll(".occupant-btn");
+                    allBtns.forEach(function (b) {
+                        b.classList.remove("selected");
+                    });
+                    // 현재 버튼 선택
+                    btn.classList.add("selected");
+                    selectedTargetId = btn.dataset.userid;
+                });
+                occupantListDiv.appendChild(btn);
             });
+        }
+
+        // 선택 해제 함수
+        function clearSelection() {
+            var allBtns = document.querySelectorAll(".occupant-btn");
+            allBtns.forEach(function (b) {
+                b.classList.remove("selected");
+            });
+            selectedTargetId = null;
         }
     </script>
 </body>
