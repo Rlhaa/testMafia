@@ -57,11 +57,7 @@ export class RoomService {
 
   // 시스템 메시지 전송 헬퍼
   // 지정된 룸id의 모든 클라이언트에세 시스템 메시지 전송
-  private sendSystemMessage(
-    server: Server,
-    roomId: string,
-    message: string,
-  ): void {
+  sendSystemMessage(server: Server, roomId: string, message: string): void {
     server.to(roomId).emit('message', { sender: 'system', message });
   }
   // -------- 헬퍼함수 -------- 추후 다른 폴더에서 따로 관리해야하나?

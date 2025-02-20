@@ -271,7 +271,6 @@ export class GameService {
     };
   }
 
-  // 1차 투표 결과 집계
   async calculateVoteResult(roomId: string) {
     console.log(`calculateVoteResult 실행 - roomId: ${roomId}`);
     const gameId = await this.getCurrentGameId(roomId);
@@ -282,7 +281,7 @@ export class GameService {
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
     const votes = await this.redisClient.get(firstVoteKey);
     if (!votes) {
-      return { winnerId: null, voteCount: 0 };
+      return { winnerId: null, voteCount: 0, tie: false, tieCandidates: [] };
     }
 
     const voteArray: { voterId: number; targetId: number }[] =
@@ -295,7 +294,6 @@ export class GameService {
 
     console.log(`투표 집계 결과:`, voteCount);
 
-    // 최다 득표자 확인
     let maxVotes = 0;
     let candidates: number[] = [];
     Object.entries(voteCount).forEach(([targetId, count]) => {
@@ -307,14 +305,26 @@ export class GameService {
       }
     });
 
-    console.log(
-      `최다 득표자 확인 - winnerId: ${candidates.length === 1 ? candidates[0] : null}`,
-    );
-
-    return {
-      winnerId: candidates.length === 1 ? candidates[0] : null,
-      voteCount: maxVotes,
-    };
+    // 동점이면 tie:true, 아니라면 tie:false
+    if (candidates.length === 1) {
+      console.log(`최다 득표자 확인 - winnerId: ${candidates[0]}`);
+      return {
+        winnerId: candidates[0],
+        voteCount: maxVotes,
+        tie: false,
+        tieCandidates: [],
+      };
+    } else {
+      console.log(
+        `동점 후보 발생 - 후보들: ${candidates.join(', ')}, 득표수: ${maxVotes}`,
+      );
+      return {
+        winnerId: null,
+        voteCount: maxVotes,
+        tie: true,
+        tieCandidates: candidates,
+      };
+    }
   }
 
   // async endGame(roomId: string): Promise<void> {

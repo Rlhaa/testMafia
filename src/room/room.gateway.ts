@@ -97,14 +97,35 @@ export class RoomGateway implements OnGatewayDisconnect {
           const finalResult = await this.gameService.calculateVoteResult(
             data.roomId,
           );
-
           console.log('투표 결과 계산 완료:', finalResult);
-          console.log(
-            `VOTE:RESULT 이벤트 전송 - roomId: ${data.roomId}, result:`,
-            finalResult,
-          );
 
-          this.server.to(data.roomId).emit('VOTE:RESULT', finalResult);
+          // 동점인 경우
+          if (finalResult.tie) {
+            // 시스템 메시지로 동점 후보 정보 전달
+            this.roomService.sendSystemMessage(
+              this.server,
+              data.roomId,
+              `투표 결과: 동률이 발생하여 밤이 시작됩니다. (${finalResult.tieCandidates.join(
+                ', ',
+              )} ${finalResult.voteCount}표)`,
+            );
+            // 밤 단계 이벤트 전송 (예: "NIGHT:PHASE")
+            this.server.to(data.roomId).emit('NIGHT:PHASE', {
+              message: '동점으로 인해 밤 단계로 넘어갑니다.',
+            });
+          } else {
+            // 동점이 아니라면 최종 결과 이벤트 전송
+            console.log(
+              `VOTE:RESULT 이벤트 전송 - roomId: ${data.roomId}, result:`,
+              finalResult,
+            );
+            this.server.to(data.roomId).emit('VOTE:RESULT', finalResult);
+            this.roomService.sendSystemMessage(
+              this.server,
+              data.roomId,
+              `투표 결과: 최다 득표자 ${finalResult.winnerId} (${finalResult.voteCount}표)`,
+            );
+          }
         }
       }
     } catch (error) {

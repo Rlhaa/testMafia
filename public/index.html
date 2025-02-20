@@ -40,13 +40,14 @@
             margin-bottom: 10px;
         }
 
+        /* 접속 인원 버튼 그리드 */
         #occupantList {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 5px;
         }
 
-        /* 부트스트랩 버튼 사용, 선택되면 색상이 변함 */
+        /* 부트스트랩 버튼 스타일 사용, 선택 시 색상 변경 */
         .occupant-btn {
             cursor: pointer;
             transition: background-color 0.3s;
@@ -68,7 +69,7 @@
             font-weight: bold;
         }
 
-        /* 투표 확정 버튼 */
+        /* 투표 확정 버튼 스타일 */
         #voteBtn {
             margin-top: 10px;
             padding: 8px 12px;
@@ -78,11 +79,29 @@
 
         .disabled-btn {
             opacity: 0.5;
-            /* 흐려지게 만들기 */
             pointer-events: none;
-            /* 클릭 불가능하게 */
             cursor: not-allowed;
-            /* 마우스를 올렸을 때 '금지' 커서 표시 */
+        }
+
+        @keyframes blink {
+            0% {
+                opacity: 1;
+                background-color: red;
+            }
+
+            50% {
+                opacity: 0;
+                background-color: red;
+            }
+
+            100% {
+                opacity: 1;
+                background-color: red;
+            }
+        }
+
+        .blink {
+            animation: blink 1s infinite;
         }
     </style>
 </head>
@@ -113,6 +132,7 @@
     <!-- 투표 확정 버튼 (컨테이너 외부) -->
     <div id="voteContainer" style="display: none; margin-top: 10px;">
         <button id="voteBtn" class="btn btn-success">투표 확정</button>
+        <p id="voteStatus"></p>
     </div>
     <!-- 게임 상태 영역 -->
     <div id="gameSection" style="display: none; margin-top: 20px;">
@@ -127,9 +147,11 @@
         document.getElementById('roomTitle').textContent = "채팅룸 (룸 " + roomId + ")";
 
         var currentUserId;
-        var socket;      // 단일 소켓
-        var roomInfo;    // ROOM:JOINED 또는 ROOM:UPDATED 이벤트로 최신 방 정보 수신
+        var socket;               // 단일 소켓
+        var roomInfo;             // 최신 방 정보
         var selectedTargetId = null; // 투표 대상으로 선택된 플레이어의 ID
+
+        // 로그인 및 룸 입장
         document.getElementById("loginBtn").addEventListener("click", function () {
             var userIdInput = document.getElementById("userId").value;
             if (!userIdInput) {
@@ -137,27 +159,30 @@
                 return;
             }
             currentUserId = Number(userIdInput);
+            console.log("입력된 사용자 ID:", currentUserId);
 
-            //  단일 소켓 생성 (auth 옵션 사용)
             socket = io("http://localhost:3000/room", {
                 auth: { roomId: roomId, userId: currentUserId }
             });
 
-            //  UI 표시
+            // UI 표시
             document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
             document.getElementById("voteContainer").style.display = "block";
 
-            //  방 입장 요청
+            // 룸 입장 요청
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
+            socket.emit("requestRoomInfo", { roomId: roomId }); // 필요시 사용
 
             socket.once("ROOM:JOINED", function (data) {
                 roomInfo = data;
+                console.log("ROOM:JOINED 수신:", roomInfo);
                 updateOccupantList(roomInfo);
             });
 
             socket.on("ROOM:UPDATED", function (data) {
                 roomInfo = data;
+                console.log("ROOM:UPDATED 수신:", roomInfo);
                 updateOccupantList(roomInfo);
             });
 
@@ -175,125 +200,47 @@
                 alert("게임 에러: " + data.message);
             });
 
-            //  투표 확정 버튼 클릭 이벤트 (여기서 정상적으로 등록)
+            socket.on("VOTE:RESULT", function (data) {
+                // 투표 버튼 다시 활성화
+                var voteBtn = document.getElementById("voteBtn");
+                voteBtn.disabled = false;
+                voteBtn.classList.remove("disabled-btn");
+                console.log("투표 버튼이 다시 활성화되었습니다.");
+
+                // 최다 득표자 버튼 찾기 (data.winnerId가 1인 경우 data-userid="1"인 버튼 선택)
+                var winnerBtn = document.querySelector(`.occupant-btn[data-userid="${data.winnerId}"]`);
+                if (winnerBtn) {
+                    // 'blink' 클래스를 추가해서 깜빡이는 효과 적용
+                    winnerBtn.classList.add("blink");
+                }
+            });
+
+            // 투표 확정 버튼 클릭 이벤트
             document.getElementById("voteBtn").addEventListener("click", function () {
                 if (!selectedTargetId) {
                     alert("투표할 대상을 선택하세요.");
                     return;
                 }
-
-                console.log("투표 요청 전송:", { roomId, voterId: currentUserId, targetId: Number(selectedTargetId) });
-
                 socket.emit("VOTE:PLAYER", {
                     roomId: roomId,
                     voterId: currentUserId,
                     targetId: Number(selectedTargetId)
-                }, (response) => {
-                    console.log("서버 응답 수신:", response); // 🔹 서버 응답이 정상적으로 수신되는지 확인
-
+                }, function (response) {
+                    console.log("서버 응답 수신:", response);
                     if (!response || !response.success) {
                         alert(response?.message || "서버 응답이 올바르지 않습니다.");
                         return;
                     }
-
-                    console.log(`사용자 ${currentUserId}가 사용자 ${selectedTargetId}에게 투표 완료`);
-
-                    // 투표 버튼을 비활성화하여 추가 클릭 방지
-                    document.getElementById("voteBtn").classList.add("disabled-btn");
-
+                    console.log("투표 완료:", { voterId: currentUserId, targetId: selectedTargetId });
+                    var voteBtn = document.getElementById("voteBtn");
+                    voteBtn.disabled = true;
+                    console.log("투표 버튼 disabled:", voteBtn.disabled);
+                    voteBtn.classList.add("disabled-btn");
                     clearSelection();
                 });
             });
 
-
-
         });
-
-        socket.on("UPDATE_VOTES", function (data) {
-            updateVoteUI(data);
-        });
-
-        socket.on("VOTE:RESULT", function (data) {
-            console.log(`VOTE:RESULT 이벤트 수신 성공`)
-            displayVoteResult(data);
-        });
-
-        socket.on("VOTE:COMPLETE", function (data) {
-            console.log("모든 생존 플레이어가 투표 완료");
-            document.getElementById("voteStatus").textContent = data.message;
-        });
-
-
-
-        // SECONDVOTE 단계가 시작되면 버튼 다시 활성화
-        socket.on("SECONDVOTE_START", function () {
-            console.log("SECONDVOTE 단계 시작. 투표 버튼 활성화.");
-            document.getElementById("voteBtn").classList.remove("disabled-btn");
-        });
-
-        //  유저 목록에서 클릭한 플레이어를 선택하는 함수
-        function updateOccupantList(roomData) {
-            var occupantListDiv = document.getElementById("occupantList");
-            occupantListDiv.innerHTML = "";
-            var players = [];
-            try {
-                players = typeof roomData.players === "string" ? JSON.parse(roomData.players) : roomData.players;
-            } catch (error) {
-                players = [];
-            }
-            players.forEach(function (player) {
-                var btn = document.createElement("button");
-                btn.className = "btn btn-outline-primary occupant-btn";
-                btn.textContent = "사용자 " + player.id;
-                btn.dataset.userid = player.id;
-
-                btn.addEventListener("click", function () {
-                    if (player.id === currentUserId) {
-                        alert("자기 자신에게는 투표할 수 없습니다.");
-                        return;
-                    }
-
-                    document.querySelectorAll(".occupant-btn").forEach((b) => b.classList.remove("selected"));
-
-                    btn.classList.add("selected");
-                    selectedTargetId = Number(btn.dataset.userid); // 숫자로 변환
-                    console.log(`선택된 유저: ${selectedTargetId}`);
-                });
-
-                occupantListDiv.appendChild(btn);
-            });
-        }
-
-        //  선택 해제 함수
-        function clearSelection() {
-            document.querySelectorAll(".occupant-btn").forEach((b) => b.classList.remove("selected"));
-            selectedTargetId = null;
-        }
-
-        //  투표 현황을 UI에 업데이트하는 함수
-        function updateVoteUI(data) {
-            const voteListElement = document.getElementById("voteList");
-            if (!voteListElement) return;
-
-            voteListElement.innerHTML = "";
-            data.forEach(vote => {
-                const listItem = document.createElement("li");
-                listItem.textContent = `사용자 ${vote.voterId} → 사용자 ${vote.targetId}에게 투표`;
-                voteListElement.appendChild(listItem);
-            });
-
-            if (data.length >= totalPlayers) {
-                document.getElementById("voteStatus").textContent = "모든 사용자가 투표 완료";
-            } else {
-                document.getElementById("voteStatus").textContent = `현재 투표 진행 중 (${voteData.length}/${totalPlayers})`;
-            }
-        }
-
-        //  투표 결과를 UI에 표시하는 함수
-        function displayVoteResult(data) {
-            console.log(`투표 결과 표시 함수 진입`)
-            alert(`최다 득표자: 사용자 ${data.winnerId} (${data.voteCount}표)`);
-        }
 
         // 채팅 메시지 추가 함수
         function appendChatMessage(message, isRole) {
@@ -319,8 +266,9 @@
 
         // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)
         function updateOccupantList(roomData) {
+            console.log("접속 인원 업데이트:", roomData);
             var occupantListDiv = document.getElementById("occupantList");
-            occupantListDiv.innerHTML = ""; // 기존 목록 초기화
+            occupantListDiv.innerHTML = "";
             var players = [];
             try {
                 players = typeof roomData.players === "string" ? JSON.parse(roomData.players) : roomData.players;
@@ -329,19 +277,24 @@
             }
             players.forEach(function (player) {
                 var btn = document.createElement("button");
-                btn.className = "btn btn-outline-primary occupant-btn";
+                // 자기 자신이면 버튼 비활성화
+                if (player.id === currentUserId) {
+                    btn.className = "btn btn-secondary occupant-btn";
+                    btn.disabled = true;
+                } else {
+                    btn.className = "btn btn-outline-primary occupant-btn";
+                }
                 btn.textContent = "사용자 " + player.id;
-                btn.dataset.userid = player.id; // data-userid 속성 저장
-                // 클릭 시 선택 상태 토글 (자신에게 투표 불가 조건은 별도로 처리)
+                btn.dataset.userid = player.id;
+                // 클릭 시 선택 상태 토글
                 btn.addEventListener("click", function () {
-                    // 모든 버튼에서 선택 해제
-                    var allBtns = document.querySelectorAll(".occupant-btn");
+                    var allBtns = document.querySelectorAll(".occupant-btn:not([disabled])");
                     allBtns.forEach(function (b) {
                         b.classList.remove("selected");
                     });
-                    // 현재 버튼 선택
                     btn.classList.add("selected");
-                    selectedTargetId = btn.dataset.userid;
+                    selectedTargetId = Number(btn.dataset.userid);
+                    console.log("선택된 대상:", selectedTargetId);
                 });
                 occupantListDiv.appendChild(btn);
             });
@@ -349,7 +302,7 @@
 
         // 선택 해제 함수
         function clearSelection() {
-            var allBtns = document.querySelectorAll(".occupant-btn");
+            var allBtns = document.querySelectorAll(".occupant-btn:not([disabled])");
             allBtns.forEach(function (b) {
                 b.classList.remove("selected");
             });
