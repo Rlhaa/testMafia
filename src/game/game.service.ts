@@ -140,6 +140,19 @@ export class GameService {
     return updatedPlayers; // 업데이트된 플레이어 배열 반환
   }
 
+  //getMafias
+  //마피아를 배정받은 사람들을 구합니다.
+  //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
+  async getMafias(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 마피아인 플레이어만 필터링합니다.
+    const mafias = players.filter((player) => player.role === 'mafia');
+
+    return mafias;
+  }
+
   // processFirstVote
   // - 1차 투표를 처리합니다.
   // - 모든 살아있는 플레이어가 투표했거나, 투표 마감 시간이 지난 경우 최다 득표 대상을 반환합니다.

@@ -75,13 +75,10 @@ export class RoomGateway implements OnGatewayDisconnect {
   //   @MessageBody() data: { roomId: string; userId: number; message: string },
   //   @ConnectedSocket() client: Socket,
   // ) {
+  //   const { roomId } = await this.roomService.getRoomInfo(data.roomId);
   //   // 해당 방의 모든 플레이어를 가져옵니다.
-  //   const players = await this.roomService.getPlayersInRoom(data.roomId);
-
   //   // 마피아인 플레이어만 필터링합니다.
-  //   const mafias = players.filter(
-  //     (player) => player.role === 'mafia' && player.isAlive,
-  //   );
+  //   const mafias = this.gameService.getMafias(data.roomId, roomId);
 
   //   // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
   //   mafias.forEach((mafia) => {
