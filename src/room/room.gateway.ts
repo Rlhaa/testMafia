@@ -15,6 +15,7 @@ export interface Player {
   id: number;
   role?: string;
   isAlive: boolean;
+  socketId?: string; // 소켓 ID 추가
 }
 
 @WebSocketGateway({
@@ -138,12 +139,13 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
       mafias.forEach((mafia) => {
-        console.log(data.roomId);
-        console.log('-----------', mafia.id);
-        this.server.to(mafia.id.toString()).emit('CHAT:MAFIA', {
-          sender: data.userId,
-          message: data.message,
-        });
+        const mafiaPlayer = players.find((player) => player.id === mafia.id);
+        if (mafiaPlayer && mafiaPlayer.socketId) {
+          this.server.to(mafiaPlayer.socketId).emit('CHAT:MAFIA', {
+            sender: data.userId,
+            message: data.message,
+          });
+        }
       });
     } catch (error) {
       console.error('handleMafiaMessage Error:', error);
@@ -159,7 +161,13 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     const { roomId, userId } = data;
-    await this.roomService.joinRoom(this.server, client, roomId, userId);
+    await this.roomService.joinRoom(
+      this.server,
+      client,
+      roomId,
+      userId,
+      client.id,
+    );
   }
 
   // leaveRoom 이벤트: 룸 서비스의 leaveRoom() 호출

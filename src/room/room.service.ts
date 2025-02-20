@@ -14,6 +14,7 @@ interface Player {
   id: number;
   role?: string;
   isAlive?: boolean;
+  socketId?: string; // 소켓 ID 추가
 }
 
 @Injectable()
@@ -191,6 +192,7 @@ export class RoomService {
     client: Socket,
     roomId: string,
     userId: number,
+    socketId: string,
   ): Promise<void> {
     // roomId 또는 userId가 제공되지 않은 경우 예외처리
     if (!roomId || !userId) {
@@ -221,7 +223,7 @@ export class RoomService {
     // 플레이어 추가 (최대 8명 제한 적용)
     try {
       // 상위 조건문에 걸리지 않으면, addPlayer메서드로 새로운 플레이어 추가
-      await this.addPlayer(roomId, { id: userId });
+      await this.addPlayer(roomId, { id: userId, socketId });
     } catch (error: any) {
       client.emit('error', { message: error.message });
       return;
