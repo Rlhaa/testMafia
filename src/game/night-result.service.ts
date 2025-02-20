@@ -5,19 +5,30 @@ import { RoomGateway } from './../room/room.gateway';
 export class NightResultService {
   constructor(private readonly roomGateway: RoomGateway) {}
 
-  /**
-   * 밤 결과를 클라이언트에 공지 전파
-   */
+  // 기본 시스템 공지 함수
+  announceSystemMessage(
+    roomId: string,
+    message: string,
+    additionalData?: Record<string, any>,
+  ): void {
+    this.roomGateway.broadcastNotice(
+      roomId,
+      'system_message',
+      message,
+      additionalData,
+    );
+  }
+
   announceNightResult(
     roomId: string,
     nightNumber: number,
     result: { killedUserId: string | null; details: string },
   ): void {
     const message = `밤 동안의 사건 결과: ${result.details}`;
-    const payload = { nightNumber, result, message };
-
-    // RoomGateway를 이용해 클라이언트에 전파
-    this.roomGateway.broadcastNotice(roomId, 'night_result', message, payload);
+    this.roomGateway.broadcastNotice(roomId, 'night_result', message, {
+      nightNumber,
+      result,
+    });
   }
 
   announceDayStart(roomId: string, dayNumber: number): void {
@@ -58,5 +69,26 @@ export class NightResultService {
     this.roomGateway.broadcastNotice(roomId, 'morning_start', message, {
       morningNumber,
     });
+  }
+
+  // 추가된 시스템 공지 함수들
+  announceJoinRoom(roomId: string, userId: number): void {
+    const message = `${userId}번 유저가 ${roomId}번 방에 접속하였습니다.`;
+    this.announceSystemMessage(roomId, message);
+  }
+
+  announceRoomFull(roomId: string): void {
+    const message = '방이 꽉 찼습니다. 10초 후 게임이 시작됩니다.';
+    this.announceSystemMessage(roomId, message);
+  }
+
+  announceLeaveRoom(roomId: string, userId: number): void {
+    const message = `${userId}번 유저가 ${roomId}번 방에서 나갔습니다.`;
+    this.announceSystemMessage(roomId, message);
+  }
+
+  announceCancelTimer(roomId: string): void {
+    const message = '인원이 줄어들어 게임 시작 타이머가 취소되었습니다.';
+    this.announceSystemMessage(roomId, message);
   }
 }

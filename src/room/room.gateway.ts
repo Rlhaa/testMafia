@@ -119,11 +119,11 @@ export class RoomGateway implements OnGatewayDisconnect {
    */
   broadcastNotice(
     roomId: string,
-    type: string,
+    event: string,
     message: string,
     additionalData?: Record<string, any>,
   ) {
-    const payload = { roomId, type, message, ...additionalData };
-    this.server.to(roomId).emit('ROOM:NIGHT_RESULT', payload);
+    const payload = { roomId, message, ...additionalData };
+    this.server.to(roomId).emit(event, payload);
   }
 }
