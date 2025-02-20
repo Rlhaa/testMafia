@@ -10,6 +10,12 @@ import { Server, Socket } from 'socket.io';
 import { GameService, FirstVote } from '../game/game.service';
 import { RoomService } from './room.service';
 
+export interface Player {
+  id: number;
+  role?: string;
+  isAlive: boolean;
+}
+
 @WebSocketGateway({
   namespace: 'room', // 현재 단계에서 네임스페이스를 구성할 필요가 크진 않지만, 일단 이렇게 따로 웹소켓 통신 공간을 지정 가능
 })
@@ -46,8 +52,13 @@ export class RoomGateway implements OnGatewayDisconnect {
     // 해당 방의 게임 데이터 가져오기
     const roomData = await this.roomService.getRoomInfo(data.roomId);
 
+    // players가 JSON 문자열일 경우 파싱
+    const players: Player[] = typeof roomData.players === 'string' 
+      ? JSON.parse(roomData.players) 
+      : roomData.players;
+
     // 죽은 플레이어만 필터링
-    const deadPlayers = roomData.players.filter((player) => player.isAlive === false);
+    const deadPlayers = players.filter((player) => player.isAlive === false);
 
     // 죽은 플레이어에게만 메시지 전송
     deadPlayers.forEach((deadPlayer) => {
@@ -56,10 +67,9 @@ export class RoomGateway implements OnGatewayDisconnect {
         message: data.message,
       });
     });
+  
 }
 
-
-  
 
 
   // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
