@@ -326,7 +326,6 @@ export class GameService {
       };
     }
   }
-
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
   //   if (!gameId) {

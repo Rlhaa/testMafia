@@ -83,6 +83,18 @@
             cursor: not-allowed;
         }
 
+        /* 2차 투표 버튼 컨테이너 */
+        #secondVoteContainer {
+            display: none;
+            margin-top: 10px;
+        }
+
+        #secondVoteContainer button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            font-size: 16px;
+        }
+
         @keyframes blink {
             0% {
                 opacity: 1;
@@ -134,6 +146,11 @@
         <button id="voteBtn" class="btn btn-success">투표 확정</button>
         <p id="voteStatus"></p>
     </div>
+    <!-- 2차 투표 버튼 컨테이너 (초기에는 숨김) -->
+    <div id="secondVoteContainer" style="display: none;">
+        <button id="executeBtn" class="btn btn-danger">사살</button>
+        <button id="survivalBtn" class="btn btn-info">생존</button>
+    </div>
     <!-- 게임 상태 영역 -->
     <div id="gameSection" style="display: none; margin-top: 20px;">
         <h2>게임 상태</h2>
@@ -149,7 +166,7 @@
         var currentUserId;
         var socket;               // 단일 소켓
         var roomInfo;             // 최신 방 정보
-        var selectedTargetId = null; // 투표 대상으로 선택된 플레이어의 ID
+        var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
 
         // 로그인 및 룸 입장
         document.getElementById("loginBtn").addEventListener("click", function () {
@@ -170,9 +187,8 @@
             document.getElementById("gameSection").style.display = "block";
             document.getElementById("voteContainer").style.display = "block";
 
-            // 룸 입장 요청
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
-            socket.emit("requestRoomInfo", { roomId: roomId }); // 필요시 사용
+            socket.emit("requestRoomInfo", { roomId: roomId });
 
             socket.once("ROOM:JOINED", function (data) {
                 roomInfo = data;
@@ -200,28 +216,13 @@
                 alert("게임 에러: " + data.message);
             });
 
-            socket.on("VOTE:RESULT", function (data) {
-                // 투표 버튼 다시 활성화
-                var voteBtn = document.getElementById("voteBtn");
-                voteBtn.disabled = false;
-                voteBtn.classList.remove("disabled-btn");
-                console.log("투표 버튼이 다시 활성화되었습니다.");
-
-                // 최다 득표자 버튼 찾기 (data.winnerId가 1인 경우 data-userid="1"인 버튼 선택)
-                var winnerBtn = document.querySelector(`.occupant-btn[data-userid="${data.winnerId}"]`);
-                if (winnerBtn) {
-                    // 'blink' 클래스를 추가해서 깜빡이는 효과 적용
-                    winnerBtn.classList.add("blink");
-                }
-            });
-
-            // 투표 확정 버튼 클릭 이벤트
+            // 1차 투표 확정 버튼 클릭 이벤트
             document.getElementById("voteBtn").addEventListener("click", function () {
                 if (!selectedTargetId) {
                     alert("투표할 대상을 선택하세요.");
                     return;
                 }
-                socket.emit("VOTE:PLAYER", {
+                socket.emit("VOTE:FIRST", {
                     roomId: roomId,
                     voterId: currentUserId,
                     targetId: Number(selectedTargetId)
@@ -231,15 +232,48 @@
                         alert(response?.message || "서버 응답이 올바르지 않습니다.");
                         return;
                     }
-                    console.log("투표 완료:", { voterId: currentUserId, targetId: selectedTargetId });
+                    console.log("1차 투표 완료:", { voterId: currentUserId, targetId: selectedTargetId });
                     var voteBtn = document.getElementById("voteBtn");
                     voteBtn.disabled = true;
-                    console.log("투표 버튼 disabled:", voteBtn.disabled);
                     voteBtn.classList.add("disabled-btn");
                     clearSelection();
                 });
             });
 
+            // 수신 이벤트: 2차 투표 진행 지시 (VOTE:SURVIVAL)
+            socket.on("VOTE:SURVIVAL", function (data) {
+                console.log("VOTE:SURVIVAL 이벤트 수신:", data);
+                // 1차 투표 확정 버튼 숨기기/비활성화
+                document.getElementById("voteContainer").style.display = "none";
+                // 2차 투표 버튼 컨테이너 보이기
+                document.getElementById("secondVoteContainer").style.display = "block";
+            });
+
+            // 2차 투표: 사살 버튼 클릭
+            document.getElementById("executeBtn").addEventListener("click", function () {
+                socket.emit("VOTE:SECOND", {
+                    roomId: roomId,
+                    voterId: currentUserId,
+                    execute: true
+                }, function (response) {
+                    console.log("2차 투표 (사살) 응답:", response);
+                    // 2차 투표 후 버튼 숨기기
+                    document.getElementById("secondVoteContainer").style.display = "none";
+                });
+            });
+
+            // 2차 투표: 생존 버튼 클릭
+            document.getElementById("survivalBtn").addEventListener("click", function () {
+                socket.emit("VOTE:SECOND", {
+                    roomId: roomId,
+                    voterId: currentUserId,
+                    execute: false
+                }, function (response) {
+                    console.log("2차 투표 (생존) 응답:", response);
+                    // 2차 투표 후 버튼 숨기기
+                    document.getElementById("secondVoteContainer").style.display = "none";
+                });
+            });
         });
 
         // 채팅 메시지 추가 함수
@@ -277,7 +311,6 @@
             }
             players.forEach(function (player) {
                 var btn = document.createElement("button");
-                // 자기 자신이면 버튼 비활성화
                 if (player.id === currentUserId) {
                     btn.className = "btn btn-secondary occupant-btn";
                     btn.disabled = true;
@@ -286,7 +319,6 @@
                 }
                 btn.textContent = "사용자 " + player.id;
                 btn.dataset.userid = player.id;
-                // 클릭 시 선택 상태 토글
                 btn.addEventListener("click", function () {
                     var allBtns = document.querySelectorAll(".occupant-btn:not([disabled])");
                     allBtns.forEach(function (b) {
