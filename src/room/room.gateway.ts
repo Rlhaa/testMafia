@@ -70,82 +70,49 @@ export class RoomGateway implements OnGatewayDisconnect {
   //   }
   // }
   //
-  //
-  // @SubscribeMessage('chatDead')
-  // async handleChatDead(
-  //   @MessageBody() data: { roomId: string; userId: number; message: string },
-  //   @ConnectedSocket() client: Socket,
-  // ): Promise<void> {
-  //   // 방의 플레이어 정보를 가져옵니다.
-  //   const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-  //   if (!currentGId) {
-  //     throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-  //   }
-  //   const gameData = await this.gameService.getGameData(
-  //     data.roomId,
-  //     currentGId,
-  //   );
-  //   const players: Player[] = gameData.players;
-  //   // ? JSON.parse(gameData.players)
-  //   // : [];
-
-  //   // 메시지를 보낸 사용자의 정보를 찾습니다.
-  //   const sender = players.find((player) => player.id === data.userId);
-
-  //   if (!sender) {
-  //     client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-  //     return;
-  //   }
-
-  //   // 죽은 플레이어만 필터링
-  //   const deadPlayers = players.filter((player) => player.isAlive === false);
-
-  //   // 죽은 플레이어에게만 메시지 전송
-  //   deadPlayers.forEach((deadPlayer) => {
-  //     this.server.to(deadPlayer.id.toString()).emit('CHAT:DEAD', {
-  //       sender: data.userId,
-  //       message: data.message,
-  //     });
-  //   });
-  // }
 
   @SubscribeMessage('chatDead')
-async handleChatDead(
-  @MessageBody() data: { roomId: string; userId: number; message: string },
-  @ConnectedSocket() client: Socket,
-): Promise<void> {
-  try {
-    // 방의 플레이어 정보를 가져옵니다.
-    const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-    if (!currentGId) {
-      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-    }
-
-    const gameData = await this.gameService.getGameData(data.roomId, currentGId);
-    const players: Player[] = gameData.players;
-
-    // 죽은 플레이어들만 필터링합니다.
-    const deadPlayers = await this.gameService.getDead(data.roomId, currentGId);
-    let messageSentToDeadPlayers = false;
-
-    
-    deadPlayers.forEach((deadPlayer) => {
-      const death = players.find((player) => player.id === deadPlayer.id)
-      if (death && death.socketId) {
-        this.server.to(death.socketId).emit('CHAT:DEAD', {
-          sender: data.userId,
-          message: data.message,
-        });
-        messageSentToDeadPlayers = true;
+  async handleChatDead(
+    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    try {
+      // 방의 플레이어 정보를 가져옵니다.
+      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!currentGId) {
+        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
       }
-    });
 
-  } catch (error) {
-    console.error('handleChatDead Error:', error);
-    client.emit('error', { message: '죽은 플레이어 메시지 처리 중 오류 발생.' });
+      const gameData = await this.gameService.getGameData(
+        data.roomId,
+        currentGId,
+      );
+      const players: Player[] = gameData.players;
+
+      // 죽은 플레이어들만 필터링합니다.
+      const deadPlayers = await this.gameService.getDead(
+        data.roomId,
+        currentGId,
+      );
+      let messageSentToDeadPlayers = false;
+
+      deadPlayers.forEach((deadPlayer) => {
+        const death = players.find((player) => player.id === deadPlayer.id);
+        if (death && death.socketId) {
+          this.server.to(death.socketId).emit('CHAT:DEAD', {
+            sender: data.userId,
+            message: data.message,
+          });
+          messageSentToDeadPlayers = true;
+        }
+      });
+    } catch (error) {
+      console.error('handleChatDead Error:', error);
+      client.emit('error', {
+        message: '죽은 플레이어 메시지 처리 중 오류 발생.',
+      });
+    }
   }
-}
-
 
   @SubscribeMessage('chatMafia')
   async handleMafiaMessage(
@@ -164,7 +131,7 @@ async handleChatDead(
         currentGId,
       );
       const players: Player[] = gameData.players;
-      
+
       // 메시지를 보낸 사용자의 정보를 찾습니다.
       const sender = players.find((player) => player.id === data.userId);
       if (!sender) {

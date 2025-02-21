@@ -326,17 +326,6 @@ export class GameService {
     return currentDay;
   }
 
-  //수신자: 시체
-  async getGhosts(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 죽은 플레이어만 필터링
-    const deadPlayers = players.filter((player) => player.isAlive === false);
-
-    return deadPlayers;
-  }
-
   //수신자: 마피아
   async getMafias(roomId: string, gameId: string) {
     const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
@@ -348,6 +337,7 @@ export class GameService {
     return mafias;
   }
 
+  //수신자: 시체
   async getDead(roomId: string, gameId: string) {
     const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
     const players: Player[] = gameData.players;
@@ -357,7 +347,6 @@ export class GameService {
 
     return dead;
   }
-
 
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
