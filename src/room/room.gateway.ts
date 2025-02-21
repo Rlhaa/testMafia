@@ -10,6 +10,8 @@ import { Server, Socket } from 'socket.io';
 import { GameService, FirstVote } from '../game/game.service';
 import { RoomService } from './room.service';
 import { BadRequestException } from '@nestjs/common';
+import { NightResultService } from 'src/notice/night-result.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 export interface Player {
   id: number;
@@ -27,7 +29,10 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   constructor(
     private readonly gameService: GameService,
+    @Inject(forwardRef(() => RoomService))
     private readonly roomService: RoomService,
+    @Inject(forwardRef(() => NightResultService))
+    private readonly nightResultService: NightResultService,
   ) {}
   // @SubscribeMessage 데코레이터로 클라이언트에서 발행한 특정 이벤트를 구독할 수 있다.
   // >> 클라이언트가 chatMessage 이벤트를 발행하면, 이 데코레이터가 이벤트를 구독하여 내부 로직 실행

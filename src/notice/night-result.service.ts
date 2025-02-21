@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { RoomGateway } from '../room/room.gateway';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { RoomGateway } from 'src/room/room.gateway';
 
 @Injectable()
 export class NightResultService {
-  constructor(private readonly roomGateway: RoomGateway) {}
+  constructor(
+    @Inject(forwardRef(() => RoomGateway))
+    private readonly roomGateway: RoomGateway,
+  ) {}
 
   // 기본 시스템 공지 함수
   announceSystemMessage(
