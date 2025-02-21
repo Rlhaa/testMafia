@@ -8,7 +8,7 @@ import { Redis } from 'ioredis';
 import { Server, Socket, RemoteSocket } from 'socket.io';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { GameService } from '../game/game.service';
-import { NightResultService } from 'src/game/night-result.service';
+import { NightResultService } from 'src/notice/night-result.service';
 
 interface Player {
   id: number;
