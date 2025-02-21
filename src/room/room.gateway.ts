@@ -317,4 +317,17 @@ export class RoomGateway implements OnGatewayDisconnect {
       client.emit('voteError', { message: error.message });
     }
   }
+  /**
+   * 클라이언트에게 메시지를 브로드캐스트하는 유틸리티 함수
+   * (서비스에서 호출하여 공지를 전파할 때 사용)
+   */
+  broadcastNotice(
+    roomId: string,
+    event: string,
+    message: string,
+    additionalData?: Record<string, any>,
+  ) {
+    const payload = { roomId, message, ...additionalData };
+    this.server.to(roomId).emit(event, payload);
+  }
 }
