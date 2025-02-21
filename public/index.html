@@ -1,173 +1,188 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>룸 채팅 및 게임 테스트</title>
     <!-- 부트스트랩 CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
     <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+
+      /* 전체 컨테이너: 채팅과 접속 인원 영역 좌우 배치 (7:3 비율) */
+      .container-custom {
+        display: flex;
+        gap: 10px;
+      }
+
+      .chat-container {
+        flex: 7;
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+
+      .occupant-container {
+        flex: 3;
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+
+      #chatMessages {
+        border: 1px solid #ccc;
+        height: 300px;
+        overflow-y: auto;
+        padding: 5px;
+        background-color: #f9f9f9;
+        margin-bottom: 10px;
+      }
+
+      /* 접속 인원 버튼 그리드 */
+      #occupantList {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+      }
+
+      /* 부트스트랩 버튼 스타일 사용, 선택 시 색상 변경 */
+      .occupant-btn {
+        cursor: pointer;
+        transition: background-color 0.3s;
+        height: 65px;
+      }
+
+      .occupant-btn.selected {
+        background-color: #007bff;
+        color: white;
+      }
+
+      .system-message {
+        color: green;
+        font-weight: bold;
+      }
+
+      .role-message {
+        color: blue;
+        font-weight: bold;
+      }
+
+      /* 투표 확정 버튼 스타일 */
+      #voteBtn {
+        margin-top: 10px;
+        padding: 8px 12px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      .disabled-btn {
+        opacity: 0.5;
+        pointer-events: none;
+        cursor: not-allowed;
+      }
+
+      /* 2차 투표 버튼 컨테이너 */
+      #secondVoteContainer {
+        display: none;
+        margin-top: 10px;
+      }
+
+      #secondVoteContainer button {
+        margin-right: 10px;
+        padding: 8px 12px;
+        font-size: 16px;
+      }
+
+      @keyframes blink {
+        0% {
+          opacity: 1;
+          background-color: red;
         }
 
-        /* 전체 컨테이너: 채팅과 접속 인원 영역 좌우 배치 (7:3 비율) */
-        .container-custom {
-            display: flex;
-            gap: 10px;
+        50% {
+          opacity: 0;
+          background-color: red;
         }
 
-        .chat-container {
-            flex: 7;
-            border: 1px solid #ccc;
-            padding: 10px;
+        100% {
+          opacity: 1;
+          background-color: red;
         }
+      }
 
-        .occupant-container {
-            flex: 3;
-            border: 1px solid #ccc;
-            padding: 10px;
-        }
-
-        #chatMessages {
-            border: 1px solid #ccc;
-            height: 300px;
-            overflow-y: auto;
-            padding: 5px;
-            background-color: #f9f9f9;
-            margin-bottom: 10px;
-        }
-
-        /* 접속 인원 버튼 그리드 */
-        #occupantList {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px;
-        }
-
-        /* 부트스트랩 버튼 스타일 사용, 선택 시 색상 변경 */
-        .occupant-btn {
-            cursor: pointer;
-            transition: background-color 0.3s;
-            height: 65px;
-        }
-
-        .occupant-btn.selected {
-            background-color: #007bff;
-            color: white;
-        }
-
-        .system-message {
-            color: green;
-            font-weight: bold;
-        }
-
-        .role-message {
-            color: blue;
-            font-weight: bold;
-        }
-
-        /* 투표 확정 버튼 스타일 */
-        #voteBtn {
-            margin-top: 10px;
-            padding: 8px 12px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        .disabled-btn {
-            opacity: 0.5;
-            pointer-events: none;
-            cursor: not-allowed;
-        }
-
-        /* 2차 투표 버튼 컨테이너 */
-        #secondVoteContainer {
-            display: none;
-            margin-top: 10px;
-        }
-
-        #secondVoteContainer button {
-            margin-right: 10px;
-            padding: 8px 12px;
-            font-size: 16px;
-        }
-
-        @keyframes blink {
-            0% {
-                opacity: 1;
-                background-color: red;
-            }
-
-            50% {
-                opacity: 0;
-                background-color: red;
-            }
-
-            100% {
-                opacity: 1;
-                background-color: red;
-            }
-        }
-
-        .blink {
-            animation: blink 1s infinite;
-        }
+      .blink {
+        animation: blink 1s infinite;
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <h1>룸 채팅 및 게임 테스트</h1>
     <!-- 사용자 ID 입력 -->
     <div class="form-group">
-        <label for="userId">사용자 ID:</label>
-        <input type="number" id="userId" class="form-control" placeholder="1">
-        <button id="loginBtn" class="btn btn-primary mt-2">로그인 (룸 입장)</button>
+      <label for="userId">사용자 ID:</label>
+      <input type="number" id="userId" class="form-control" placeholder="1" />
+      <button id="loginBtn" class="btn btn-primary mt-2">
+        로그인 (룸 입장)
+      </button>
     </div>
     <!-- 전체 컨테이너: 채팅과 접속 인원 영역 -->
-    <div class="container-custom" id="mainContainer" style="display: none;">
-        <!-- 채팅 영역 -->
-        <div class="chat-container" id="chatRoom">
-            <h2 id="roomTitle"></h2>
-            <div id="chatMessages"></div>
-            <input type="text" id="messageInput" class="form-control" placeholder="메시지를 입력하세요">
-            <button id="sendBtn" class="btn btn-secondary mt-2">전송</button>
-        </div>
-        <!-- 접속 인원 영역 -->
-        <div class="occupant-container" id="roomOccupants">
-            <h2>현재 접속 인원</h2>
-            <div id="occupantList"></div>
-        </div>
+    <div class="container-custom" id="mainContainer" style="display: none">
+      <!-- 채팅 영역 -->
+      <div class="chat-container" id="chatRoom">
+        <h2 id="roomTitle"></h2>
+        <div id="chatMessages"></div>
+        <input
+          type="text"
+          id="messageInput"
+          class="form-control"
+          placeholder="메시지를 입력하세요"
+        />
+        <button id="sendBtn" class="btn btn-secondary mt-2">전송</button>
+      </div>
+      <!-- 접속 인원 영역 -->
+      <div class="occupant-container" id="roomOccupants">
+        <h2>현재 접속 인원</h2>
+        <div id="occupantList"></div>
+      </div>
     </div>
     <!-- 투표 확정 버튼 (컨테이너 외부) -->
-    <div id="voteContainer" style="display: none; margin-top: 10px;">
-        <button id="voteBtn" class="btn btn-success">투표 확정</button>
-        <p id="voteStatus"></p>
+    <div id="voteContainer" style="display: none; margin-top: 10px">
+      <button id="voteBtn" class="btn btn-success">투표 확정</button>
+      <p id="voteStatus"></p>
     </div>
     <!-- 2차 투표 버튼 컨테이너 (초기에는 숨김) -->
-    <div id="secondVoteContainer" style="display: none;">
-        <button id="executeBtn" class="btn btn-danger">사살</button>
-        <button id="survivalBtn" class="btn btn-info">생존</button>
+    <div id="secondVoteContainer" style="display: none">
+      <button id="executeBtn" class="btn btn-danger">사살</button>
+      <button id="survivalBtn" class="btn btn-info">생존</button>
     </div>
     <!-- 게임 상태 영역 -->
-    <div id="gameSection" style="display: none; margin-top: 20px;">
-        <h2>게임 상태</h2>
-        <div id="gameStatus"></div>
+    <div id="gameSection" style="display: none; margin-top: 20px">
+      <h2>게임 상태</h2>
+      <div id="gameStatus"></div>
+      <!-- 테스트용 버튼 추가 -->
+      <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
+        게임 단계: 밤으로 전환
+      </button>
     </div>
 
     <script>
-        // 방 ID 추출 (예: http://localhost:3000/room/1)
-        var pathSegments = window.location.pathname.split('/');
-        var roomId = pathSegments[pathSegments.length - 1];
-        document.getElementById('roomTitle').textContent = "채팅룸 (룸 " + roomId + ")";
+      // 방 ID 추출 (예: http://localhost:3000/room/1)
+      var pathSegments = window.location.pathname.split('/');
+      var roomId = pathSegments[pathSegments.length - 1];
+      document.getElementById('roomTitle').textContent =
+        '채팅룸 (룸 ' + roomId + ')';
 
         var currentUserId;
         var socket;               // 단일 소켓
         var roomInfo;             // 최신 방 정보
         var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
-
+        var currentUserRole;
+        var currentUserIsAlive;
         // 로그인 및 룸 입장
         document.getElementById("loginBtn").addEventListener("click", function () {
             var userIdInput = document.getElementById("userId").value;
@@ -205,10 +220,19 @@
             socket.on("message", function (data) {
                 appendChatMessage("[" + data.sender + "] " + data.message);
             });
+            socket.on('CHAT:DEAD', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+            });
+
+          socket.on('CHAT:MAFIA', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
 
             document.getElementById("sendBtn").addEventListener("click", sendChatMessage);
 
             socket.on("YOUR_ROLE", function (data) {
+              currentUserRole = data.role;
+              currentUserIsAlive = data.isAlive;
                 appendChatMessage(data.message, true);
             });
 
@@ -261,7 +285,11 @@
                     document.getElementById("secondVoteContainer").style.display = "none";
                 });
             });
-
+                     // 게임 단계 전환 버튼 클릭 이벤트
+          document
+            .getElementById('setNightPhaseBtn')
+            .addEventListener('click', function () {
+              socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
             // 2차 투표: 생존 버튼 클릭
             document.getElementById("survivalBtn").addEventListener("click", function () {
                 socket.emit("VOTE:SECOND", {
@@ -292,11 +320,27 @@
             var messageInputElem = document.getElementById("messageInput");
             var message = messageInputElem ? messageInputElem.value : "";
             if (message.trim() === "") return;
+            if (currentUserRole === 'mafia') {
+          // 마피아일 경우
+          socket.emit('chatMafia', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+        } else if (currentUserIsAlive === false) {
+          // 죽은 플레이어일 경우
+          socket.emit('chatDead', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+        } else {
             socket.emit("chatMessage", { roomId: roomId, userId: currentUserId, message: message });
             if (messageInputElem) {
                 messageInputElem.value = "";
             }
         }
+      }
 
         // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)
         function updateOccupantList(roomData) {
@@ -332,15 +376,14 @@
             });
         }
 
-        // 선택 해제 함수
-        function clearSelection() {
-            var allBtns = document.querySelectorAll(".occupant-btn:not([disabled])");
-            allBtns.forEach(function (b) {
-                b.classList.remove("selected");
-            });
-            selectedTargetId = null;
-        }
+      // 선택 해제 함수
+      function clearSelection() {
+        var allBtns = document.querySelectorAll('.occupant-btn');
+        allBtns.forEach(function (b) {
+          b.classList.remove('selected');
+        });
+        selectedTargetId = null;
+      }
     </script>
-</body>
-
+  </body>
 </html>

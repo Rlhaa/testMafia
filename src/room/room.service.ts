@@ -158,11 +158,14 @@ export class RoomService {
           (p: Player) => Number(p.id) === Number(socketUserId),
         );
 
+        console.log(`player 의 데이터 입니다 ${JSON.stringify(player)}`);
+
         if (player) {
           setTimeout(() => {
             socket.emit('YOUR_ROLE', {
               message: `${player.role} 입니다!`,
               role: player.role,
+              isAlive: player.isAlive,
             });
           }, 3000);
         }
@@ -180,6 +183,9 @@ export class RoomService {
     }
   }
 
+  getUserSocketMap(userId: number) {
+    return this.userSocketMap.get(userId);
+  }
   // joinRoom: 클라이언트의 방 입장 및 관련 비즈니스 로직 실행
   // 서버 인스턴스, 클라이언트 소켓, 방 ID, 사용자 ID를 매개변수로 받음
   async joinRoom(
@@ -199,7 +205,7 @@ export class RoomService {
     // userId: 42가 다시한번 접속하여 joinroom 이벤트가 발생한다면 조건문 조건 true >> 조건문에 걸림
     if (this.userSocketMap.has(userId)) {
       // this.userSocketMap.get(42)를 호출하여, 이전에 저장된 소켓 ID인 'socket_001'을 가져옴
-      const previousSocketId = this.userSocketMap.get(userId)!;
+      const previousSocketId = this.getUserSocketMap(userId)!;
 
       // 서버의 소켓 목록에서 server.sockets.sockets.get('socket_001')를 통해 실제 소켓 객체 찾음
       const previousSocket = server.sockets.sockets.get(previousSocketId);
