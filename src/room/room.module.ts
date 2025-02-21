@@ -8,7 +8,7 @@ import { GameModule } from 'src/game/game.module';
 import { NoticeModule } from 'src/notice/notice.module';
 
 @Module({
-  imports: [forwardRef(() => GameModule), NoticeModule],
+  imports: [forwardRef(() => GameModule), forwardRef(() => NoticeModule)],
   controllers: [RoomController],
   providers: [RoomGateway, RoomService, RedisProvider],
   exports: [RoomService, RoomGateway],
