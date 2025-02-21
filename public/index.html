@@ -177,150 +177,181 @@
       document.getElementById('roomTitle').textContent =
         '채팅룸 (룸 ' + roomId + ')';
 
-        var currentUserId;
-        var socket;               // 단일 소켓
-        var roomInfo;             // 최신 방 정보
-        var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
-        var currentUserRole;
-        var currentUserIsAlive;
-        // 로그인 및 룸 입장
-        document.getElementById("loginBtn").addEventListener("click", function () {
-            var userIdInput = document.getElementById("userId").value;
-            if (!userIdInput) {
-                alert("사용자 ID를 입력하세요.");
-                return;
-            }
-            currentUserId = Number(userIdInput);
-            console.log("입력된 사용자 ID:", currentUserId);
+      var currentUserId;
+      var socket; // 단일 소켓
+      var roomInfo; // 최신 방 정보
+      var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
+      var currentUserRole;
+      var currentUserIsAlive;
+      // 로그인 및 룸 입장
+      document
+        .getElementById('loginBtn')
+        .addEventListener('click', function () {
+          var userIdInput = document.getElementById('userId').value;
+          if (!userIdInput) {
+            alert('사용자 ID를 입력하세요.');
+            return;
+          }
+          currentUserId = Number(userIdInput);
+          console.log('입력된 사용자 ID:', currentUserId);
 
-            socket = io("http://localhost:3000/room", {
-                auth: { roomId: roomId, userId: currentUserId }
-            });
+          socket = io('http://localhost:3000/room', {
+            auth: { roomId: roomId, userId: currentUserId },
+          });
 
-            // UI 표시
-            document.getElementById("mainContainer").style.display = "flex";
-            document.getElementById("gameSection").style.display = "block";
-            document.getElementById("voteContainer").style.display = "block";
+          // UI 표시
+          document.getElementById('mainContainer').style.display = 'flex';
+          document.getElementById('gameSection').style.display = 'block';
+          document.getElementById('voteContainer').style.display = 'block';
 
-            socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
-            socket.emit("requestRoomInfo", { roomId: roomId });
+          socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
+          socket.emit('requestRoomInfo', { roomId: roomId });
 
-            socket.once("ROOM:JOINED", function (data) {
-                roomInfo = data;
-                console.log("ROOM:JOINED 수신:", roomInfo);
-                updateOccupantList(roomInfo);
-            });
+          socket.once('ROOM:JOINED', function (data) {
+            roomInfo = data;
+            console.log('ROOM:JOINED 수신:', roomInfo);
+            updateOccupantList(roomInfo);
+          });
 
-            socket.on("ROOM:UPDATED", function (data) {
-                roomInfo = data;
-                console.log("ROOM:UPDATED 수신:", roomInfo);
-                updateOccupantList(roomInfo);
-            });
+          socket.on('ROOM:UPDATED', function (data) {
+            roomInfo = data;
+            console.log('ROOM:UPDATED 수신:', roomInfo);
+            updateOccupantList(roomInfo);
+          });
 
-            socket.on("message", function (data) {
-                appendChatMessage("[" + data.sender + "] " + data.message);
-            });
-            socket.on('CHAT:DEAD', function (data) {
+          socket.on('message', function (data) {
             appendChatMessage('[' + data.sender + '] ' + data.message);
-            });
+          });
+          socket.on('CHAT:DEAD', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
 
           socket.on('CHAT:MAFIA', function (data) {
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
 
-            document.getElementById("sendBtn").addEventListener("click", sendChatMessage);
+          document
+            .getElementById('sendBtn')
+            .addEventListener('click', sendChatMessage);
 
-            socket.on("YOUR_ROLE", function (data) {
-              currentUserRole = data.role;
-              currentUserIsAlive = data.isAlive;
-                appendChatMessage(data.message, true);
-            });
+          socket.on('YOUR_ROLE', function (data) {
+            currentUserRole = data.role;
+            currentUserIsAlive = data.isAlive;
+            appendChatMessage(data.message, true);
+          });
 
-            socket.on("error", function (data) {
-                alert("게임 에러: " + data.message);
-            });
+          socket.on('error', function (data) {
+            alert('게임 에러: ' + data.message);
+          });
 
-            // 1차 투표 확정 버튼 클릭 이벤트
-            document.getElementById("voteBtn").addEventListener("click", function () {
-                if (!selectedTargetId) {
-                    alert("투표할 대상을 선택하세요.");
+          // 1차 투표 확정 버튼 클릭 이벤트
+          document
+            .getElementById('voteBtn')
+            .addEventListener('click', function () {
+              if (!selectedTargetId) {
+                alert('투표할 대상을 선택하세요.');
+                return;
+              }
+              socket.emit(
+                'VOTE:FIRST',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  targetId: Number(selectedTargetId),
+                },
+                function (response) {
+                  console.log('서버 응답 수신:', response);
+                  if (!response || !response.success) {
+                    alert(
+                      response?.message || '서버 응답이 올바르지 않습니다.',
+                    );
                     return;
-                }
-                socket.emit("VOTE:FIRST", {
-                    roomId: roomId,
+                  }
+                  console.log('1차 투표 완료:', {
                     voterId: currentUserId,
-                    targetId: Number(selectedTargetId)
-                }, function (response) {
-                    console.log("서버 응답 수신:", response);
-                    if (!response || !response.success) {
-                        alert(response?.message || "서버 응답이 올바르지 않습니다.");
-                        return;
-                    }
-                    console.log("1차 투표 완료:", { voterId: currentUserId, targetId: selectedTargetId });
-                    var voteBtn = document.getElementById("voteBtn");
-                    voteBtn.disabled = true;
-                    voteBtn.classList.add("disabled-btn");
-                    clearSelection();
-                });
+                    targetId: selectedTargetId,
+                  });
+                  var voteBtn = document.getElementById('voteBtn');
+                  voteBtn.disabled = true;
+                  voteBtn.classList.add('disabled-btn');
+                  clearSelection();
+                },
+              );
             });
 
-            // 수신 이벤트: 2차 투표 진행 지시 (VOTE:SURVIVAL)
-            socket.on("VOTE:SURVIVAL", function (data) {
-                console.log("VOTE:SURVIVAL 이벤트 수신:", data);
-                // 1차 투표 확정 버튼 숨기기/비활성화
-                document.getElementById("voteContainer").style.display = "none";
-                // 2차 투표 버튼 컨테이너 보이기
-                document.getElementById("secondVoteContainer").style.display = "block";
-            });
+          // 수신 이벤트: 2차 투표 진행 지시 (VOTE:SURVIVAL)
+          socket.on('VOTE:SURVIVAL', function (data) {
+            console.log('VOTE:SURVIVAL 이벤트 수신:', data);
+            // 1차 투표 확정 버튼 숨기기/비활성화
+            document.getElementById('voteContainer').style.display = 'none';
+            // 2차 투표 버튼 컨테이너 보이기
+            document.getElementById('secondVoteContainer').style.display =
+              'block';
+          });
 
-            // 2차 투표: 사살 버튼 클릭
-            document.getElementById("executeBtn").addEventListener("click", function () {
-                socket.emit("VOTE:SECOND", {
-                    roomId: roomId,
-                    voterId: currentUserId,
-                    execute: true
-                }, function (response) {
-                    console.log("2차 투표 (사살) 응답:", response);
-                    // 2차 투표 후 버튼 숨기기
-                    document.getElementById("secondVoteContainer").style.display = "none";
-                });
+          // 2차 투표: 사살 버튼 클릭
+          document
+            .getElementById('executeBtn')
+            .addEventListener('click', function () {
+              socket.emit(
+                'VOTE:SECOND',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  execute: true,
+                },
+                function (response) {
+                  console.log('2차 투표 (사살) 응답:', response);
+                  // 2차 투표 후 버튼 숨기기
+                  document.getElementById('secondVoteContainer').style.display =
+                    'none';
+                },
+              );
             });
-                     // 게임 단계 전환 버튼 클릭 이벤트
+          // 게임 단계 전환 버튼 클릭 이벤트
           document
             .getElementById('setNightPhaseBtn')
             .addEventListener('click', function () {
               socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
-            // 2차 투표: 생존 버튼 클릭
-            document.getElementById("survivalBtn").addEventListener("click", function () {
-                socket.emit("VOTE:SECOND", {
-                    roomId: roomId,
-                    voterId: currentUserId,
-                    execute: false
-                }, function (response) {
-                    console.log("2차 투표 (생존) 응답:", response);
-                    // 2차 투표 후 버튼 숨기기
-                    document.getElementById("secondVoteContainer").style.display = "none";
+              // 2차 투표: 생존 버튼 클릭
+              document
+                .getElementById('survivalBtn')
+                .addEventListener('click', function () {
+                  socket.emit(
+                    'VOTE:SECOND',
+                    {
+                      roomId: roomId,
+                      voterId: currentUserId,
+                      execute: false,
+                    },
+                    function (response) {
+                      console.log('2차 투표 (생존) 응답:', response);
+                      // 2차 투표 후 버튼 숨기기
+                      document.getElementById(
+                        'secondVoteContainer',
+                      ).style.display = 'none';
+                    },
+                  );
                 });
             });
-        });
-
-        // 채팅 메시지 추가 함수
-        function appendChatMessage(message, isRole) {
-            var chatMessagesDiv = document.getElementById("chatMessages");
-            var messageElement = document.createElement("div");
-            if (isRole) {
-                messageElement.classList.add("role-message");
-            }
-            messageElement.textContent = message;
-            chatMessagesDiv.appendChild(messageElement);
+        }); //오류해결 괄호
+      // 채팅 메시지 추가 함수
+      function appendChatMessage(message, isRole) {
+        var chatMessagesDiv = document.getElementById('chatMessages');
+        var messageElement = document.createElement('div');
+        if (isRole) {
+          messageElement.classList.add('role-message');
         }
+        messageElement.textContent = message;
+        chatMessagesDiv.appendChild(messageElement);
+      }
 
-        // 채팅 메시지 전송 함수
-        function sendChatMessage() {
-            var messageInputElem = document.getElementById("messageInput");
-            var message = messageInputElem ? messageInputElem.value : "";
-            if (message.trim() === "") return;
-            if (currentUserRole === 'mafia') {
+      // 채팅 메시지 전송 함수
+      function sendChatMessage() {
+        var messageInputElem = document.getElementById('messageInput');
+        var message = messageInputElem ? messageInputElem.value : '';
+        if (message.trim() === '') return;
+        if (currentUserRole === 'mafia') {
           // 마피아일 경우
           socket.emit('chatMafia', {
             roomId: roomId,
@@ -335,46 +366,55 @@
             message: message,
           });
         } else {
-            socket.emit("chatMessage", { roomId: roomId, userId: currentUserId, message: message });
-            if (messageInputElem) {
-                messageInputElem.value = "";
-            }
+          socket.emit('chatMessage', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+          if (messageInputElem) {
+            messageInputElem.value = '';
+          }
         }
       }
 
-        // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)
-        function updateOccupantList(roomData) {
-            console.log("접속 인원 업데이트:", roomData);
-            var occupantListDiv = document.getElementById("occupantList");
-            occupantListDiv.innerHTML = "";
-            var players = [];
-            try {
-                players = typeof roomData.players === "string" ? JSON.parse(roomData.players) : roomData.players;
-            } catch (error) {
-                players = [];
-            }
-            players.forEach(function (player) {
-                var btn = document.createElement("button");
-                if (player.id === currentUserId) {
-                    btn.className = "btn btn-secondary occupant-btn";
-                    btn.disabled = true;
-                } else {
-                    btn.className = "btn btn-outline-primary occupant-btn";
-                }
-                btn.textContent = "사용자 " + player.id;
-                btn.dataset.userid = player.id;
-                btn.addEventListener("click", function () {
-                    var allBtns = document.querySelectorAll(".occupant-btn:not([disabled])");
-                    allBtns.forEach(function (b) {
-                        b.classList.remove("selected");
-                    });
-                    btn.classList.add("selected");
-                    selectedTargetId = Number(btn.dataset.userid);
-                    console.log("선택된 대상:", selectedTargetId);
-                });
-                occupantListDiv.appendChild(btn);
-            });
+      // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)
+      function updateOccupantList(roomData) {
+        console.log('접속 인원 업데이트:', roomData);
+        var occupantListDiv = document.getElementById('occupantList');
+        occupantListDiv.innerHTML = '';
+        var players = [];
+        try {
+          players =
+            typeof roomData.players === 'string'
+              ? JSON.parse(roomData.players)
+              : roomData.players;
+        } catch (error) {
+          players = [];
         }
+        players.forEach(function (player) {
+          var btn = document.createElement('button');
+          if (player.id === currentUserId) {
+            btn.className = 'btn btn-secondary occupant-btn';
+            btn.disabled = true;
+          } else {
+            btn.className = 'btn btn-outline-primary occupant-btn';
+          }
+          btn.textContent = '사용자 ' + player.id;
+          btn.dataset.userid = player.id;
+          btn.addEventListener('click', function () {
+            var allBtns = document.querySelectorAll(
+              '.occupant-btn:not([disabled])',
+            );
+            allBtns.forEach(function (b) {
+              b.classList.remove('selected');
+            });
+            btn.classList.add('selected');
+            selectedTargetId = Number(btn.dataset.userid);
+            console.log('선택된 대상:', selectedTargetId);
+          });
+          occupantListDiv.appendChild(btn);
+        });
+      }
 
       // 선택 해제 함수
       function clearSelection() {
