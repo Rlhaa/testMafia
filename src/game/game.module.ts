@@ -7,7 +7,7 @@ import { RoomModule } from 'src/room/room.module';
 import { NoticeModule } from 'src/notice/notice.module'; // NoticeModule 임포트
 
 @Module({
-  imports: [forwardRef(() => RoomModule), NoticeModule],
+  imports: [forwardRef(() => RoomModule), forwardRef(() => NoticeModule)], // forwardRef로 감싸기
   providers: [GameService, RedisProvider, RoomService], // NightResultService 제거
   exports: [GameService],
 })
