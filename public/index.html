@@ -145,6 +145,8 @@
       var roomInfo; // ROOM:JOINED 또는 ROOM:UPDATED 이벤트로 최신 방 정보 수신
       var selectedTargetId = null; // 투표 대상으로 선택된 플레이어의 ID
       var currentUserRole;
+      var currentUserIsAlive;
+      
       document
         .getElementById('loginBtn')
         .addEventListener('click', function () {
@@ -196,6 +198,7 @@
 
           socket.on('YOUR_ROLE', function (data) {
             currentUserRole = data.role;
+            currentUserIsAlive = data.isAlive;
             appendChatMessage(data.message, true);
           });
 
@@ -340,21 +343,28 @@
         var message = messageInputElem ? messageInputElem.value : '';
         if (message.trim() === '') return;
         if (currentUserRole === 'mafia') {
+          // 마피아일 경우
           socket.emit('chatMafia', {
             roomId: roomId,
             userId: currentUserId,
             message: message,
           });
+        } else if (currentUserIsAlive === false) {
+          // 죽은 플레이어일 경우
+          socket.emit('chatDead', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
         } else {
+          // 살아있는 플레이어일 경우
           socket.emit('chatMessage', {
             roomId: roomId,
             userId: currentUserId,
             message: message,
           });
         }
-        if (messageInputElem) {
-          messageInputElem.value = '';
-        }
+
       }
 
       // 접속 인원 업데이트 함수 (부트스트랩 버튼으로 표시)

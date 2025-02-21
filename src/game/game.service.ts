@@ -348,6 +348,17 @@ export class GameService {
     return mafias;
   }
 
+  async getDead(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 죽은 사람을 검색
+    const dead = players.filter((player) => player.isAlive === false);
+
+    return dead;
+  }
+
+
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
   //   if (!gameId) {
