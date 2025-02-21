@@ -251,7 +251,7 @@ export class GameService {
 
     // 현재 투표한 인원 수 / 투표 가능한 인원 수 로그 출력
     console.log(
-      `현재 투표한 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
+      `1차 투표 완료 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
     );
 
     // 모든 생존 플레이어가 투표 완료될 때까지 반환하지 않음
@@ -271,7 +271,7 @@ export class GameService {
     };
   }
 
-  async calculateVoteResult(roomId: string) {
+  async calculateFirstVoteResult(roomId: string) {
     console.log(`calculateVoteResult 실행 - roomId: ${roomId}`);
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
@@ -323,6 +323,125 @@ export class GameService {
         voteCount: maxVotes,
         tie: true,
         tieCandidates: candidates,
+      };
+    }
+  }
+
+  async handleSecondVoteProcess(
+    roomId: string,
+    voterId: number,
+    execute: boolean,
+  ) {
+    console.log(
+      `handleSecondVoteProcess 요청 - roomId: ${roomId}, voterId: ${voterId}, execute: ${execute}`,
+    );
+
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+
+    const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
+    const gameKey = `room:${roomId}:game:${gameId}`;
+
+    // 현재 투표 데이터 가져오기
+    const votes = await this.redisClient.get(secondVoteKey);
+    let voteArray: { voterId: number; execute: boolean }[] = votes
+      ? JSON.parse(votes)
+      : [];
+
+    // 생존한 플레이어 수 확인 (Redis에서 가져오기)
+    const gameData = await this.redisClient.hget(gameKey, 'players');
+    const alivePlayers = JSON.parse(gameData as string).filter(
+      (p: any) => p.isAlive,
+    );
+
+    // 투표 정보 저장 (검증 후)
+    voteArray.push({ voterId, execute });
+    await this.redisClient.set(secondVoteKey, JSON.stringify(voteArray));
+
+    // 현재 투표한 인원 수 / 투표 가능한 인원 수 로그 출력
+    console.log(
+      `2차 투표 완료 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
+    );
+
+    // 모든 생존 플레이어가 투표 완료될 때까지 반환하지 않음
+    if (voteArray.length !== alivePlayers.length) {
+      return {
+        success: true,
+        voteData: voteArray,
+        allVotesCompleted: false, // 아직 모든 투표가 완료되지 않음
+      };
+    }
+
+    // 모든 생존 플레이어가 투표 완료되었을 경우에만 반환
+    return {
+      success: true,
+      voteData: voteArray,
+      allVotesCompleted: true,
+    };
+  }
+
+  async calculateSecondVoteResult(roomId: string) {
+    console.log(`calculateSecondVoteResult 실행 - roomId: ${roomId}`);
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+
+    const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
+    const votes = await this.redisClient.get(secondVoteKey);
+    if (!votes) {
+      return { execute: false, voteCount: 0, tie: false };
+    }
+
+    const voteArray: { voterId: number; execute: boolean }[] =
+      JSON.parse(votes);
+    let executeCount = 0;
+    let surviveCount = 0;
+
+    voteArray.forEach((vote) => {
+      if (vote.execute) {
+        executeCount++;
+      } else {
+        surviveCount++;
+      }
+    });
+
+    console.log(
+      `2차 투표 집계 결과: 사살(${executeCount}) vs 생존(${surviveCount})`,
+    );
+
+    const executeVoterIds = voteArray
+      .filter((vote) => vote.execute)
+      .map((vote) => vote.voterId);
+    const surviveVoterIds = voteArray
+      .filter((vote) => !vote.execute)
+      .map((vote) => vote.voterId);
+
+    if (executeCount > surviveCount) {
+      return {
+        execute: true,
+        voteCount: executeCount,
+        tie: false,
+        executeVoterIds,
+        surviveVoterIds,
+      };
+    } else if (executeCount < surviveCount) {
+      return {
+        execute: false,
+        voteCount: surviveCount,
+        tie: false,
+        executeVoterIds,
+        surviveVoterIds,
+      };
+    } else {
+      return {
+        execute: null,
+        voteCount: executeCount,
+        tie: true,
+        executeVoterIds,
+        surviveVoterIds,
       };
     }
   }

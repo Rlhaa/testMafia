@@ -142,7 +142,7 @@
         </div>
     </div>
     <!-- 투표 확정 버튼 (컨테이너 외부) -->
-    <div id="voteContainer" style="display: none; margin-top: 10px;">
+    <div id="firstVoteContainer" style="display: none; margin-top: 10px;">
         <button id="voteBtn" class="btn btn-success">투표 확정</button>
         <p id="voteStatus"></p>
     </div>
@@ -185,7 +185,7 @@
             // UI 표시
             document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
-            document.getElementById("voteContainer").style.display = "block";
+            document.getElementById("firstVoteContainer").style.display = "block";
 
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
             socket.emit("requestRoomInfo", { roomId: roomId });
@@ -243,8 +243,15 @@
             // 수신 이벤트: 2차 투표 진행 지시 (VOTE:SURVIVAL)
             socket.on("VOTE:SURVIVAL", function (data) {
                 console.log("VOTE:SURVIVAL 이벤트 수신:", data);
+
+                var winnerBtn = document.querySelector(`.occupant-btn[data-userid="${data.winnerId}"]`);
+                if (winnerBtn) {
+                    // 'blink' 클래스를 추가해서 깜빡이는 효과 적용
+                    winnerBtn.classList.add("blink");
+                }
+
                 // 1차 투표 확정 버튼 숨기기/비활성화
-                document.getElementById("voteContainer").style.display = "none";
+                document.getElementById("firstVoteContainer").style.display = "none";
                 // 2차 투표 버튼 컨테이너 보이기
                 document.getElementById("secondVoteContainer").style.display = "block";
             });
