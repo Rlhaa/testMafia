@@ -15,7 +15,6 @@ export interface Player {
   id: number;
   role?: string;
   isAlive: boolean;
-  socketId?: string; // 소켓 ID 추가
 }
 
 @WebSocketGateway({
@@ -97,9 +96,11 @@ export class RoomGateway implements OnGatewayDisconnect {
       let messageSentToDeadPlayers = false;
 
       deadPlayers.forEach((deadPlayer) => {
-        const death = players.find((player) => player.id === deadPlayer.id);
-        if (death && death.socketId) {
-          this.server.to(death.socketId).emit('CHAT:DEAD', {
+        const deadPlayerSocketId = this.roomService.getUserSocketMap(
+          deadPlayer.id,
+        );
+        if (deadPlayerSocketId) {
+          this.server.to(deadPlayerSocketId).emit('CHAT:DEAD', {
             sender: data.userId,
             message: data.message,
           });
@@ -144,10 +145,11 @@ export class RoomGateway implements OnGatewayDisconnect {
       let messageSentToMafias = false;
 
       // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
+      // 각 마피아에게 메시지를 전송
       mafias.forEach((mafia) => {
-        const mafiaPlayer = players.find((player) => player.id === mafia.id);
-        if (gameData.phase === 'night' && mafiaPlayer && mafiaPlayer.socketId) {
-          this.server.to(mafiaPlayer.socketId).emit('CHAT:MAFIA', {
+        const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
+        if (gameData.phase === 'night' && mafiaPlayerSocketId) {
+          this.server.to(mafiaPlayerSocketId).emit('CHAT:MAFIA', {
             sender: data.userId,
             message: data.message,
           });
@@ -191,13 +193,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     const { roomId, userId } = data;
-    await this.roomService.joinRoom(
-      this.server,
-      client,
-      roomId,
-      userId,
-      client.id,
-    );
+    await this.roomService.joinRoom(this.server, client, roomId, userId);
   }
 
   // leaveRoom 이벤트: 룸 서비스의 leaveRoom() 호출
