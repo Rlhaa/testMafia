@@ -222,14 +222,14 @@
           socket.on('message', function (data) {
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
-          socket.on('CHAT:DEAD', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
+          // socket.on('CHAT:DEAD', function (data) {
+          //   appendChatMessage('[' + data.sender + '] ' + data.message);
+          // });
 
-          socket.on('CHAT:MAFIA', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
-
+          // socket.on('CHAT:MAFIA', function (data) {
+          //   appendChatMessage('[' + data.sender + '] ' + data.message);
+          // });
+          // 쓸데없는거 지워도 됨 마피아 끼리 채팅 , 죽은 사람 끼리 채팅 잘됨
           document
             .getElementById('sendBtn')
             .addEventListener('click', sendChatMessage);
@@ -351,21 +351,21 @@
         var messageInputElem = document.getElementById('messageInput');
         var message = messageInputElem ? messageInputElem.value : '';
         if (message.trim() === '') return;
-        if (currentUserRole === 'mafia') {
-          // 마피아일 경우
-          socket.emit('chatMafia', {
-            roomId: roomId,
-            userId: currentUserId,
-            message: message,
-          });
-        } else if (currentUserIsAlive === false) {
-          // 죽은 플레이어일 경우
-          socket.emit('chatDead', {
-            roomId: roomId,
-            userId: currentUserId,
-            message: message,
-          });
-        } else {
+        if (currentUserIsAlive === false) {
+            // 죽은 사람은 무조건 'chatDead'
+            socket.emit('chatDead', {
+              roomId: roomId,
+              userId: currentUserId,
+              message: message,
+            });
+          } else if (currentUserRole === 'mafia') {
+            // 마피아이면서 살아있는 경우
+            socket.emit('chatMafia', {
+              roomId: roomId,
+              userId: currentUserId,
+              message: message,
+            });
+          } else {
           socket.emit('chatMessage', {
             roomId: roomId,
             userId: currentUserId,
