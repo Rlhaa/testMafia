@@ -230,6 +230,10 @@
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
 
+          socket.on('system_message', function (data) {
+            appendChatMessage(`[공지] ${data.message}`, true);
+          });
+
           document
             .getElementById('sendBtn')
             .addEventListener('click', sendChatMessage);
@@ -313,28 +317,27 @@
             .getElementById('setNightPhaseBtn')
             .addEventListener('click', function () {
               socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
-              // 2차 투표: 생존 버튼 클릭
-              document
-                .getElementById('survivalBtn')
-                .addEventListener('click', function () {
-                  socket.emit(
-                    'VOTE:SECOND',
-                    {
-                      roomId: roomId,
-                      voterId: currentUserId,
-                      execute: false,
-                    },
-                    function (response) {
-                      console.log('2차 투표 (생존) 응답:', response);
-                      // 2차 투표 후 버튼 숨기기
-                      document.getElementById(
-                        'secondVoteContainer',
-                      ).style.display = 'none';
-                    },
-                  );
-                });
             });
-        }); //오류해결 괄호
+          // 2차 투표: 생존 버튼 클릭
+          document
+            .getElementById('survivalBtn')
+            .addEventListener('click', function () {
+              socket.emit(
+                'VOTE:SECOND',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  execute: false,
+                },
+                function (response) {
+                  console.log('2차 투표 (생존) 응답:', response);
+                  // 2차 투표 후 버튼 숨기기
+                  document.getElementById('secondVoteContainer').style.display =
+                    'none';
+                },
+              );
+            });
+        });
       // 채팅 메시지 추가 함수
       function appendChatMessage(message, isRole) {
         var chatMessagesDiv = document.getElementById('chatMessages');

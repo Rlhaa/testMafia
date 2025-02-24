@@ -3,12 +3,15 @@ import {
   NotFoundException,
   BadRequestException,
   Inject,
+  Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { Server, Socket, RemoteSocket } from 'socket.io';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { GameService } from '../game/game.service';
 import { NightResultService } from 'src/notice/night-result.service';
+import { TimerService } from 'src/timer/timer.service';
 
 interface Player {
   id: number;
@@ -27,15 +30,17 @@ export class RoomService {
   // ex)방 ID가 "1"이고, 타이머 객체가 setTimeout으로 생성된 경우,
   // 이 매핑은 roomCountdownTimers.set("1", timerObject)로 저장
   private roomCountdownTimers: Map<string, NodeJS.Timeout> = new Map();
-
   constructor(
     // 레디스 클라이언트 주입 받음
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
     // 게임 관련 메서드 주입을 위해 GameService 주입 받음
+    @Inject(forwardRef(() => GameService))
     private readonly gameService: GameService,
     // [수정] NightResultService 주입: 모든 공지 처리를 이 서비스에서 담당
+    @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService,
+    private readonly timerService: TimerService, //CHAN 타이머 테스트용 주입
   ) {}
 
   // -------- 헬퍼함수 --------
@@ -172,13 +177,22 @@ export class RoomService {
         }
       });
 
-      setTimeout(async () => {
-        const newDay = await this.gameService.startDayPhase(roomId, gameId);
-        server.to(roomId).emit('message', {
-          sender: 'system',
-          message: `Day ${newDay} 낮이 밝았습니다!`,
-        });
-      }, 6000);
+      // setTimeout(async () => {
+      //   const newDay = await this.gameService.startDayPhase(roomId, gameId);
+      //   server.to(roomId).emit('message', {
+      //     sender: 'system',
+      //     message: `Day ${newDay} 낮이 밝았습니다!`,
+      //   });
+      // }, 6000);
+      //CHAN TimerService를 사용하여 게임 시작 타이머 설정
+      await this.timerService
+        .startTimer(roomId, 'gamestart', 10000)
+        .toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
+      const newDay = await this.gameService.startDayPhase(roomId, gameId);
+      server.to(roomId).emit('message', {
+        sender: 'system',
+        message: `Day ${newDay} 낮이 밝았습니다!`,
+      });
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }
@@ -242,14 +256,17 @@ export class RoomService {
 
     // 방 내 소켓 수 확인: joinroom 이후 현재 유저가 8명이면 게임 자동 시작 타이머 설정
     const sockets = await server.in(roomId).allSockets();
-    if (sockets.size === 8 && !this.roomCountdownTimers.has(roomId)) {
-      const timer = setTimeout(async () => {
-        await this.prepareGame(server, roomId);
-        this.roomCountdownTimers.delete(roomId);
-      }, 10000);
-      this.roomCountdownTimers.set(roomId, timer);
+    if (
+      sockets.size === 8 &&
+      !this.timerService.hasTimer(roomId, 'gamestart')
+    ) {
       // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
       this.nightResultService.announceRoomFull(roomId);
+      //타이머 존재 확인 CHAN 서순 정리 / 시작공지 10초 기다리기 / 배정
+      await this.timerService
+        .startTimer(roomId, 'gamestart', 10000)
+        .toPromise();
+      await this.prepareGame(server, roomId);
     }
   }
 

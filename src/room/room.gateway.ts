@@ -28,6 +28,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   server: Server;
 
   constructor(
+    @Inject(forwardRef(() => GameService))
     private readonly gameService: GameService,
     @Inject(forwardRef(() => RoomService))
     private readonly roomService: RoomService,

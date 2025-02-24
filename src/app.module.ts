@@ -5,6 +5,8 @@ import { join } from 'path';
 import { GameModule } from './game/game.module';
 import { RoomModule } from './room/room.module';
 import { NoticeModule } from './notice/notice.module';
+import { TimerService } from './timer/timer.service';
+import { TimerModule } from './timer/timer.module';
 
 @Module({
   imports: [
@@ -14,8 +16,9 @@ import { NoticeModule } from './notice/notice.module';
     GameModule,
     RoomModule,
     NoticeModule,
+    TimerModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [TimerService],
 })
 export class AppModule {}
