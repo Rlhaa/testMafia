@@ -148,10 +148,22 @@ export class GameService {
     ];
     rolesPool.sort(() => Math.random() - 0.5);
 
+    const testalive = [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+    ]
+    testalive.sort(()=> Math.random() - 0.5)
+
     const updatedPlayers = players.map((player, index) => ({
       ...player,
       role: rolesPool[index],
-      isAlive: true,
+      isAlive: testalive[index],
     }));
     console.log('Updated Players:', updatedPlayers);
 

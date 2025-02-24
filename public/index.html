@@ -404,6 +404,11 @@
           document
             .getElementById('voteBtn')
             .addEventListener('click', function () {
+              if (!currentUserIsAlive) {
+                alert('죽은 사람은 투표를 할 수 없습니다.');
+                return;
+              }
+
               if (!selectedTargetId) {
                 alert('투표할 대상을 선택하세요.');
                 return;
