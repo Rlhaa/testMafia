@@ -11,121 +11,169 @@
     <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
     <style>
       body {
-        font-family: Arial, sans-serif;
+        font-family: 'Arial', sans-serif;
+        background-color: #f0f4f8;
         margin: 20px;
+        color: #333;
+        line-height: 1.6;
+        transition: background-color 4s ease;
       }
 
-      /* 전체 컨테이너: 채팅과 접속 인원 영역 좌우 배치 (7:3 비율) */
+      h1,
+      h2 {
+        color: #2c3e50;
+      }
+
       .container-custom {
         display: flex;
-        gap: 10px;
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .chat-container,
+      .occupant-container,
+      .login-container {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        transition: background-color 4s ease;
       }
 
       .chat-container {
         flex: 7;
-        border: 1px solid #ccc;
-        padding: 10px;
       }
 
       .occupant-container {
         flex: 3;
-        border: 1px solid #ccc;
-        padding: 10px;
       }
 
       #chatMessages {
-        border: 1px solid #ccc;
         height: 300px;
         overflow-y: auto;
-        padding: 5px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        padding: 10px;
         background-color: #f9f9f9;
         margin-bottom: 10px;
       }
 
-      /* 접속 인원 버튼 그리드 */
       #occupantList {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 5px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
       }
 
-      /* 부트스트랩 버튼 스타일 사용, 선택 시 색상 변경 */
       .occupant-btn {
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #ecf0f1;
         cursor: pointer;
-        transition: background-color 0.3s;
-        height: 65px;
+        transition: all 0.3s ease;
+      }
+
+      .occupant-btn:hover {
+        background-color: #d5dbdb;
       }
 
       .occupant-btn.selected {
-        background-color: #007bff;
+        background-color: #3498db;
         color: white;
       }
 
+      input[type='text'],
+      input[type='number'] {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      button:hover {
+        background-color: #2980b9;
+      }
+
+      button:disabled {
+        background-color: #bdc3c7;
+        cursor: not-allowed;
+      }
+
       .system-message {
-        color: green;
+        color: #27ae60;
         font-weight: bold;
       }
 
       .role-message {
-        color: blue;
+        color: #2980b9;
         font-weight: bold;
       }
 
-      /* 투표 확정 버튼 스타일 */
-      #voteBtn {
+      #voteBtn,
+      #executeBtn,
+      #survivalBtn {
         margin-top: 10px;
-        padding: 8px 12px;
-        font-size: 16px;
-        cursor: pointer;
-      }
-
-      .disabled-btn {
-        opacity: 0.5;
-        pointer-events: none;
-        cursor: not-allowed;
-      }
-
-      /* 2차 투표 버튼 컨테이너 */
-      #secondVoteContainer {
-        display: none;
-        margin-top: 10px;
-      }
-
-      #secondVoteContainer button {
         margin-right: 10px;
-        padding: 8px 12px;
-        font-size: 16px;
       }
 
       @keyframes blink {
         0% {
           opacity: 1;
-          background-color: red;
         }
 
         50% {
-          opacity: 0;
-          background-color: red;
+          opacity: 0.5;
         }
 
         100% {
           opacity: 1;
-          background-color: red;
         }
       }
 
       .blink {
         animation: blink 1s infinite;
       }
+
+      @media (max-width: 768px) {
+        .container-custom {
+          flex-direction: column;
+        }
+
+        .chat-container,
+        .occupant-container {
+          width: 100%;
+        }
+      }
     </style>
   </head>
 
   <body>
-    <h1>룸 채팅 및 게임 테스트</h1>
     <!-- 사용자 ID 입력 -->
-    <div class="form-group">
-      <label for="userId">사용자 ID:</label>
-      <input type="number" id="userId" class="form-control" placeholder="1" />
+    <div
+      class="login-container"
+      style="
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      "
+    >
+      <h1>룸 채팅 및 게임 테스트</h1>
+      <div class="form-group">
+        <label for="userId">사용자 ID:</label>
+        <input type="number" id="userId" class="form-control" placeholder="1" />
+      </div>
       <button id="loginBtn" class="btn btn-primary mt-2">
         로그인 (룸 입장)
       </button>
@@ -251,8 +299,18 @@
             alert('게임 에러: ' + data.message);
           });
 
-          socket.on('system_message', function (data) {
-            appendChatMessage(data.message, true);
+          socket.on('NIGHT:BACKGROUND', function (data) {
+            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+            // 전체 배경은 검정색으로
+            document.body.style.backgroundColor = 'black';
+            // div 배경은 순수 흰색 대신 연한 회색으로 변경
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#e0e0e0';
           });
 
           // VOTE:SECOND:END 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
