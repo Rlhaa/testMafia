@@ -93,6 +93,13 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
       const players: Player[] = gameData.players;
 
+      // 메시지를 보낸 사용자의 정보를 찾습니다.
+      const sender = players.find((player) => player.id === data.userId);
+      if (!sender) {
+        client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
+        return;
+      }
+
       // 죽은 플레이어들만 필터링합니다.
       const deadPlayers = await this.gameService.getDead(
         data.roomId,
@@ -110,6 +117,15 @@ export class RoomGateway implements OnGatewayDisconnect {
             message: data.message,
           });
           messageSentToDeadPlayers = true;
+        }
+        // 죽은 사람들에게 메시지를 보냈다면 방의 모든 클라이언트에게는 보내지 않음
+        //이 경우 6명이 죽은 상황이면 이 짓을 6번 반복하기 때문에 비효율적
+        //같은 게임 내에서 죽은 자들만 소통 가능한 채팅방과 마피아끼리만 대화 가능한 방을 별도로 파서 운영하는 건?
+        if (!messageSentToDeadPlayers) {
+          this.server.to(data.roomId).emit('message', {
+            sender: data.userId,
+            message: data.message,
+          });
         }
       });
     } catch (error) {
@@ -188,6 +204,23 @@ export class RoomGateway implements OnGatewayDisconnect {
 
     await this.gameService.startNightPhase(data.roomId, currentGId); // 데이터베이스 업데이트
     this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
+  }
+
+  //사망 처리 이벤트
+  @SubscribeMessage('KILL_PLAYERS')
+  async handleKillPlayers(
+    @MessageBody() data: { roomId: string; players: number[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      await this.gameService.killPlayers(data.roomId, data.players);
+      this.server.to(data.roomId).emit('PLAYERS_KILLED', {
+        message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
+      });
+    } catch (error) {
+      console.error('handleKillPlayers 에러 발생:', error);
+      client.emit('error', { message: '사망 처리 중 오류 발생.' });
+    }
   }
 
   // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출

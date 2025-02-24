@@ -168,6 +168,12 @@
       <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
         게임 단계: 밤으로 전환
       </button>
+      <!-- 플레이어 사망 버튼 -->
+      <div id="killPlayersContainer" style="margin-top: 20px">
+        <button id="killPlayersBtn" class="btn btn-danger">
+          자신 사망 처리
+        </button>
+      </div>
     </div>
 
     <script>
@@ -236,7 +242,6 @@
 
           socket.on('YOUR_ROLE', function (data) {
             currentUserRole = data.role;
-            currentUserIsAlive = data.isAlive;
             appendChatMessage(data.message, true);
           });
 
@@ -313,28 +318,38 @@
             .getElementById('setNightPhaseBtn')
             .addEventListener('click', function () {
               socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
-              // 2차 투표: 생존 버튼 클릭
-              document
-                .getElementById('survivalBtn')
-                .addEventListener('click', function () {
-                  socket.emit(
-                    'VOTE:SECOND',
-                    {
-                      roomId: roomId,
-                      voterId: currentUserId,
-                      execute: false,
-                    },
-                    function (response) {
-                      console.log('2차 투표 (생존) 응답:', response);
-                      // 2차 투표 후 버튼 숨기기
-                      document.getElementById(
-                        'secondVoteContainer',
-                      ).style.display = 'none';
-                    },
-                  );
-                });
+            }); ////2.21 18시: 여기로 괄호를 옮겨서 버튼 구분
+          // 2차 투표: 생존 버튼 클릭
+          document
+            .getElementById('survivalBtn')
+            .addEventListener('click', function () {
+              socket.emit(
+                'VOTE:SECOND',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  execute: false,
+                },
+                function (response) {
+                  console.log('2차 투표 (생존) 응답:', response);
+                  // 2차 투표 후 버튼 숨기기
+                  document.getElementById('secondVoteContainer').style.display =
+                    'none';
+                },
+              );
             });
-        }); //오류해결 괄호
+          document
+            .getElementById('killPlayersBtn')
+            .addEventListener('click', function (data) {
+              console.log(data);
+              socket.emit('KILL_PLAYERS', {
+                roomId: roomId,
+                players: [data.id], // 사망 처리할 플레이어 ID
+              });
+              currentUserIsAlive = data.isAlive;
+              //currentUserIsAlive = false;
+            });
+        }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
       // 채팅 메시지 추가 함수
       function appendChatMessage(message, isRole) {
         var chatMessagesDiv = document.getElementById('chatMessages');
@@ -351,16 +366,17 @@
         var messageInputElem = document.getElementById('messageInput');
         var message = messageInputElem ? messageInputElem.value : '';
         if (message.trim() === '') return;
-        if (currentUserRole === 'mafia') {
-          // 마피아일 경우
-          socket.emit('chatMafia', {
+        console.log('-------------', currentUserIsAlive);
+        if (currentUserIsAlive === false) {
+          // 죽은 플레이어일 경우
+          socket.emit('chatDead', {
             roomId: roomId,
             userId: currentUserId,
             message: message,
           });
-        } else if (currentUserIsAlive === false) {
-          // 죽은 플레이어일 경우
-          socket.emit('chatDead', {
+        } else if (currentUserRole === 'mafia') {
+          // 마피아일 경우
+          socket.emit('chatMafia', {
             roomId: roomId,
             userId: currentUserId,
             message: message,

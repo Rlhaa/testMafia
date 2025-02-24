@@ -369,6 +369,33 @@ export class GameService {
     return dead;
   }
 
+  // 플레이어 사망
+  async killPlayers(roomId: string, playerIds: number[]): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 선택된 플레이어의 isAlive 속성을 false로 변경
+    const updatedPlayers = players.map((player) => {
+      if (playerIds.includes(player.id)) {
+        return { ...player, isAlive: false };
+      }
+      return player;
+    });
+
+    // 업데이트된 플레이어 목록을 Redis에 저장
+    await this.redisClient.hset(
+      redisKey,
+      'players',
+      JSON.stringify(updatedPlayers),
+    );
+  }
+
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
   //   if (!gameId) {
