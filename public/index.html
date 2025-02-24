@@ -313,6 +313,20 @@
               'block';
           });
 
+          socket.on('NIGHT:BACKGROUND', function (data) {
+            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+            // 전체 배경은 검정색으로
+            document.body.style.backgroundColor = 'black';
+            // div 배경은 순수 흰색 대신 연한 회색으로 변경
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#e0e0e0';
+          });
+
           // 2차 투표: 사살 버튼 클릭 이벤트
           document
             .getElementById('executeBtn')

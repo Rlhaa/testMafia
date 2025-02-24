@@ -331,7 +331,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           targetId,
         });
       }
-      this.server.to(data.roomId).emit('NIGHT:PHASE', {
+      this.server.to(data.roomId).emit('NIGHT:BACKGROUND', {
         message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
       });
     } catch (error: any) {
