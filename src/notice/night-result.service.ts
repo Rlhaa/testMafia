@@ -94,6 +94,8 @@ export class NightResultService {
     const message = '인원이 줄어들어 게임 시작 타이머가 취소되었습니다.';
     this.announceSystemMessage(roomId, message);
   }
+
+  
   // // GameService에서 새로 호출하는 공지 함수들 아직 정확하게 이해를 하지 못했습니다.
 
   // announceGameCreated(roomId: string, gameId: string): void {

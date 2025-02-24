@@ -221,6 +221,7 @@ export class RoomService {
       }
     }
 
+    
     // 플레이어 추가 (최대 8명 제한 적용)
     try {
       // 상위 조건문에 걸리지 않으면, addPlayer메서드로 새로운 플레이어 추가

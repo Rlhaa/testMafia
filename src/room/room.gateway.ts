@@ -112,7 +112,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           deadPlayer.id,
         );
         if (deadPlayerSocketId) {
-          this.server.to(deadPlayerSocketId).emit('CHAT:DEAD', {
+          this.server.to(deadPlayerSocketId).emit('message', {
             sender: data.userId,
             message: data.message,
           });
@@ -170,7 +170,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       mafias.forEach((mafia) => {
         const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
-          this.server.to(mafiaPlayerSocketId).emit('CHAT:MAFIA', {
+          this.server.to(mafiaPlayerSocketId).emit('message', {
             sender: data.userId,
             message: data.message,
           });

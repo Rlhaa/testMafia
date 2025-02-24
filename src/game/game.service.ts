@@ -41,7 +41,7 @@ export class GameService {
     const roomPlayersData = await this.redisClient.hget(
       `room:${roomId}`,
       'players',
-    );
+    ); // 해시값 room:${roomId}
 
     let players: Player[] = [];
     if (roomPlayersData) {
@@ -69,7 +69,7 @@ export class GameService {
       Object.entries(initialGameState).map(([field, value]) =>
         this.redisClient.hset(redisKey, field, value),
       ),
-    );
+    ); // room:${roomId}:game:${gameId} 해시값
 
     // 현재 방에 진행 중인 게임 ID 저장
     await this.redisClient.set(`room:${roomId}:currentGameId`, gameId);
@@ -151,10 +151,23 @@ export class GameService {
     ];
     rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
 
+
+    const alivetest = [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]
+    alivetest.sort(() => Math.random() - 0.5);
+
     const updatedPlayers = players.map((player, index) => ({
       ...player, // 기존 플레이어 데이터 전개
       role: rolesPool[index], // 역할 할당
-      isAlive: true, // 초기 생존 상태 true 설정
+      isAlive: alivetest[index], // 초기 생존 상태 true 설정
     }));
     console.log('Updated Players:', updatedPlayers);
 
@@ -182,7 +195,7 @@ export class GameService {
 
     // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
     let currentDay = parseInt(gameData.day, 10) || 0;
-
+    
     // day 값을 1 증가
     currentDay += 1;
 
