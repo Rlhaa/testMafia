@@ -216,6 +216,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       await this.gameService.killPlayers(data.roomId, data.players);
       this.server.to(data.roomId).emit('PLAYERS_KILLED', {
         message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
+        isAlive: false,
       });
     } catch (error) {
       console.error('handleKillPlayers 에러 발생:', error);

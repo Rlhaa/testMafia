@@ -151,17 +151,7 @@ export class GameService {
     ];
     rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
 
-
-    const alivetest = [
-      false,
-      false,
-      false,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ]
+    const alivetest = [false, false, false, true, true, true, true, true];
     alivetest.sort(() => Math.random() - 0.5);
 
     const updatedPlayers = players.map((player, index) => ({
@@ -195,7 +185,7 @@ export class GameService {
 
     // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
     let currentDay = parseInt(gameData.day, 10) || 0;
-    
+
     // day 값을 1 증가
     currentDay += 1;
 
@@ -392,10 +382,13 @@ export class GameService {
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
+    let currentCitizenCounts = gameData.citizenCount;
+    let currentMafiaCounts = gameData.mafiaCount;
 
     // 선택된 플레이어의 isAlive 속성을 false로 변경
     const updatedPlayers = players.map((player) => {
       if (playerIds.includes(player.id)) {
+        player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
         return { ...player, isAlive: false };
       }
       return player;
@@ -407,6 +400,14 @@ export class GameService {
       'players',
       JSON.stringify(updatedPlayers),
     );
+    if (currentMafiaCounts < gameData.mafiaCount)
+      await this.redisClient.hset(redisKey, 'mafiaCount', currentMafiaCounts);
+    if (currentCitizenCounts < gameData.citizenCount)
+      await this.redisClient.hset(
+        redisKey,
+        'citizenCount',
+        currentCitizenCounts,
+      );
   }
 
   // async endGame(roomId: string): Promise<void> {

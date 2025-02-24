@@ -199,6 +199,8 @@
             return;
           }
           currentUserId = Number(userIdInput);
+          //유저 아이디 확인 후 생존 여부 체크 로직
+          currentUserIsAlive = true;
           console.log('입력된 사용자 ID:', currentUserId);
 
           socket = io('http://localhost:3000/room', {
@@ -251,7 +253,7 @@
 
           socket.on('system_message', function (data) {
             appendChatMessage(data.message, true);
-          })
+          });
 
           // 1차 투표 확정 버튼 클릭 이벤트
           document
@@ -349,7 +351,7 @@
               console.log(data);
               socket.emit('KILL_PLAYERS', {
                 roomId: roomId,
-                players: [data.id], // 사망 처리할 플레이어 ID
+                players: [currentUserId], // 사망 처리할 플레이어 ID
               });
               currentUserIsAlive = data.isAlive;
               //currentUserIsAlive = false;
@@ -378,6 +380,9 @@
             userId: currentUserId,
             message: message,
           });
+          if (messageInputElem) {
+            messageInputElem.value = '';
+          }
         } else if (currentUserRole === 'mafia') {
           // 마피아이면서 살아있는 경우
           socket.emit('chatMafia', {
@@ -385,6 +390,9 @@
             userId: currentUserId,
             message: message,
           });
+          if (messageInputElem) {
+            messageInputElem.value = '';
+          }
         } else {
           socket.emit('chatMessage', {
             roomId: roomId,
