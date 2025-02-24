@@ -256,8 +256,8 @@
                 alert("게임 에러: " + data.message);
             });
 
-            socket.on("NIGHT:PHASE", function (data) {
-                console.log("NIGHT:PHASE 이벤트 수신:", data);
+            socket.on("NIGHT:BACKGROUND", function (data) {
+                console.log("NIGHT:BACKGROUND 이벤트 수신:", data);
                 // 전체 배경은 검정색으로
                 document.body.style.backgroundColor = "black";
                 // div 배경은 순수 흰색 대신 연한 회색으로 변경
