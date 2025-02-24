@@ -319,31 +319,57 @@ export class RoomGateway implements OnGatewayDisconnect {
         `투표 결과: ${finalResult.execute ? '사형' : '생존'} - (${finalResult.voteCount}표), 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
       );
 
-      // 사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
+      //  gameId 조회 추가 (오류 수정)
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
+      //  사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
       const targetId = await this.gameService.getTargetId(data.roomId);
-      if (targetId !== null) {
+      if (targetId !== null && finalResult.execute) {
+        console.log(`사형 결정 - 플레이어 ${targetId}를 제거합니다.`);
+
+        //  플레이어 사망 처리
         await this.gameService.killPlayers(data.roomId, [targetId]);
+
+        //  사망자 확인을 위해 gameId 추가하여 getDead 호출 (오류 수정)
+        const deadPlayers = await this.gameService.getDead(data.roomId, gameId);
+        console.log(`현재 사망자 목록:`, deadPlayers);
+
         this.roomService.sendSystemMessage(
           this.server,
           data.roomId,
           `플레이어 ${targetId}가 사망 처리되었습니다.`,
         );
-        this.roomService.sendSystemMessage(
-          this.server,
-          data.roomId,
-          `밤이 찾아옵니다..`,
-        );
+
         this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
           targetId,
         });
       }
-      this.server.to(data.roomId).emit('NIGHT:BACKGROUND', {
-        message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
+
+      //  게임 종료 체크
+      const endCheck = await this.gameService.checkEndGame(data.roomId);
+      if (endCheck.isGameOver) {
+        const gameEndResult = await this.gameService.endGame(data.roomId);
+        this.server.to(data.roomId).emit('gameEnd', gameEndResult);
+        return;
+      }
+
+      //  밤 페이즈로 이동
+      this.server.to(data.roomId).emit('NIGHT:PHASE', {
+        message: '밤이 찾아옵니다.',
       });
+
+      console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
     } catch (error: any) {
+      console.error('VOTE:SECOND 처리 중 오류:', error);
       client.emit('voteError', { message: error.message });
     }
   }
+
   /**
    * 클라이언트에게 메시지를 브로드캐스트하는 유틸리티 함수
    * (서비스에서 호출하여 공지를 전파할 때 사용)
@@ -522,6 +548,13 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       const result = await this.gameService.processNightResult(data.roomId);
+
+      const endCheck = await this.gameService.checkEndGame(data.roomId);
+      if (endCheck.isGameOver) {
+        const endResult = await this.gameService.endGame(data.roomId);
+        this.server.to(data.roomId).emit('gameEnd', endResult);
+        return;
+      }
 
       this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
         roomId: data.roomId,

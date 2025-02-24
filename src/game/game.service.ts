@@ -194,17 +194,26 @@ export class GameService {
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
+
+    console.log(`사망 처리 전 플레이어 목록:`, players);
+
     const updatedPlayers = players.map((player) => {
       if (playerIds.includes(player.id)) {
+        console.log(`플레이어 ${player.id} 사망 처리`);
         return { ...player, isAlive: false };
       }
       return player;
     });
+
     await this.redisClient.hset(
       redisKey,
       'players',
       JSON.stringify(updatedPlayers),
     );
+
+    // 🔹 데이터 확인을 위해 사망자 목록 가져오기
+    const deadPlayers = updatedPlayers.filter((player) => !player.isAlive);
+    console.log(`사망 처리 후 사망자 목록:`, deadPlayers);
   }
 
   // ──────────────────────────────
@@ -400,18 +409,28 @@ export class GameService {
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
+
     const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
     const votes = await this.redisClient.get(secondVoteKey);
     if (!votes) {
-      return { execute: false, voteCount: 0, tie: false };
+      return {
+        execute: false,
+        voteCount: 0,
+        tie: false,
+        executeVoterIds: [],
+        surviveVoterIds: [],
+      };
     }
+
     const voteArray: { voterId: number; execute: boolean }[] =
       JSON.parse(votes);
     let executeCount = 0;
     let surviveCount = 0;
+
     voteArray.forEach((vote) => {
       vote.execute ? executeCount++ : surviveCount++;
     });
+
     console.log(
       `2차 투표 집계 결과: 사살(${executeCount}) vs 생존(${surviveCount})`,
     );
@@ -573,6 +592,8 @@ export class GameService {
       ? `room:${roomId}:game:${gameId}`
       : `room:${roomId}:game`;
 
+    console.log(`방 ${roomId} - 밤으로 전환됨.`);
+
     // 현재 게임 데이터를 가져올 필요가 있는 경우만 가져오기
     let currentDay = 0;
     if (gameId) {
@@ -589,6 +610,13 @@ export class GameService {
     // 마피아 목록 및 사망자 목록 조회 (gameId가 존재할 때만 실행)
     const mafias = gameId ? await this.getMafias(roomId, gameId) : [];
     const dead = gameId ? await this.getDead(roomId, gameId) : [];
+
+    //  클라이언트에 밤 시작 이벤트 전송
+    this.nightResultService.announceNightStart(roomId, mafias, dead);
+
+    console.log(
+      `방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
+    );
 
     return { nightNumber, mafias, dead };
   }
@@ -689,6 +717,11 @@ export class GameService {
       await this.markPlayerAsDead(roomId, Number(mafiaTarget));
     }
 
+    const endCheck = await this.checkEndGame(roomId);
+    if (endCheck.isGameOver) {
+      await this.endGame(roomId);
+    }
+
     return { killedUserId, details };
   }
 
@@ -716,5 +749,38 @@ export class GameService {
       newNightCount.toString(),
     );
     return newNightCount;
+  }
+
+  async checkEndGame(
+    roomId: string,
+  ): Promise<{ isGameOver: boolean; winningTeam: string | null }> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      console.log(`room:${roomId}에 진행 중인 게임이 없음.`);
+      return { isGameOver: false, winningTeam: null };
+    }
+
+    // 현재 게임 데이터를 조회
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 생존한 마피아와 시민 수 카운트
+    const aliveMafias = players.filter(
+      (player) => player.role === 'mafia' && player.isAlive,
+    ).length;
+    const aliveCitizens = players.filter(
+      (player) => player.role !== 'mafia' && player.isAlive,
+    ).length;
+
+    // 게임 종료 조건 판단
+    if (aliveMafias >= aliveCitizens) {
+      console.log(`게임 종료 - 마피아 승리`);
+      return { isGameOver: true, winningTeam: 'mafia' };
+    } else if (aliveMafias === 0) {
+      console.log(`게임 종료 - 시민 승리`);
+      return { isGameOver: true, winningTeam: 'citizens' };
+    }
+
+    return { isGameOver: false, winningTeam: null };
   }
 }
