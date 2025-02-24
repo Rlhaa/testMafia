@@ -57,11 +57,7 @@ export class RoomService {
 
   // 시스템 메시지 전송 헬퍼
   // 지정된 룸id의 모든 클라이언트에세 시스템 메시지 전송
-  private sendSystemMessage(
-    server: Server,
-    roomId: string,
-    message: string,
-  ): void {
+  sendSystemMessage(server: Server, roomId: string, message: string): void {
     server.to(roomId).emit('message', { sender: 'system', message });
   }
   // -------- 헬퍼함수 -------- 추후 다른 폴더에서 따로 관리해야하나?
@@ -140,6 +136,53 @@ export class RoomService {
     return players;
   }
 
+  // prepareGame: 게임 생성 및 역할 분배 후 각 소켓에 YOUR_ROLE 이벤트 전송
+  async prepareGame(server: Server, roomId: string): Promise<void> {
+    try {
+      await this.gameService.createGame(roomId);
+
+      const gameId = await this.gameService.getCurrentGameId(roomId);
+      if (!gameId) {
+        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+      }
+
+      const updatedPlayers = await this.gameService.assignRoles(roomId, gameId);
+
+      this.sendSystemMessage(
+        server,
+        roomId,
+        '마스터가 직업을 분배중입니다. 당신의 직업은...',
+      );
+
+      const sockets = await server.in(roomId).fetchSockets();
+      sockets.forEach((socket: RemoteSocket<DefaultEventsMap, any>) => {
+        const socketUserId = socket.handshake.auth.userId as string;
+        const player = updatedPlayers.find(
+          (p: Player) => Number(p.id) === Number(socketUserId),
+        );
+
+        if (player) {
+          setTimeout(() => {
+            socket.emit('YOUR_ROLE', {
+              message: `${player.role} 입니다!`,
+              role: player.role,
+            });
+          }, 3000);
+        }
+      });
+
+      setTimeout(async () => {
+        const newDay = await this.gameService.startDayPhase(roomId, gameId);
+        server.to(roomId).emit('message', {
+          sender: 'system',
+          message: `Day ${newDay} 낮이 밝았습니다!`,
+        });
+      }, 6000);
+    } catch (error: any) {
+      server.to(roomId).emit('error', { message: error.message });
+    }
+  }
+
   // joinRoom: 클라이언트의 방 입장 및 관련 비즈니스 로직 실행
   // 서버 인스턴스, 클라이언트 소켓, 방 ID, 사용자 ID를 매개변수로 받음
   async joinRoom(
@@ -201,7 +244,7 @@ export class RoomService {
     const sockets = await server.in(roomId).allSockets();
     if (sockets.size === 8 && !this.roomCountdownTimers.has(roomId)) {
       const timer = setTimeout(async () => {
-        await this.startGame(server, roomId);
+        await this.prepareGame(server, roomId);
         this.roomCountdownTimers.delete(roomId);
       }, 10000);
       this.roomCountdownTimers.set(roomId, timer);
@@ -259,45 +302,6 @@ export class RoomService {
         roomId,
         '인원이 줄어들어 게임 시작 타이머가 취소되었습니다.',
       );
-    }
-  }
-
-  // startGame: 게임 생성 및 역할 분배 후 각 소켓에 YOUR_ROLE 이벤트 전송
-  async startGame(server: Server, roomId: string): Promise<void> {
-    try {
-      const gameId = await this.gameService.createGame(roomId);
-      const updatedPlayers = await this.gameService.assignRoles(roomId, gameId);
-
-      this.sendSystemMessage(
-        server,
-        roomId,
-        '마스터가 직업을 분배중입니다. 당신의 직업은...',
-      );
-
-      // fetchSockets() 메서드는 지정한 룸(server.in(roomId))의 소켓들만 반환하여,
-      // 전체 연결된 소켓들을 모두 훑어보는 비효율적인 방법 사용 x
-      // fetchSockets()이 반환하는 각 소켓은 일반적인 Socket 타입이 아닌 RemoteSocket<DefaultEventsMap, any> 타입
-      // 이 때 DefaultEventsMap은 Socket.IO가 기본적으로 사용하는 이벤트들의 타입 정보를 담고 있는 인터페이스
-      // 기본 이벤트(예: 'connect', 'disconnect' 등)에 대한 타입 안정성을 보장
-
-      const sockets = await server.in(roomId).fetchSockets();
-      sockets.forEach((socket: RemoteSocket<DefaultEventsMap, any>) => {
-        const socketUserId = socket.handshake.auth.userId as string;
-        const player = updatedPlayers.find(
-          (p: Player) => Number(p.id) === Number(socketUserId),
-        );
-        // 방에 연결된 각 소켓에 3초 후 YOUR_ROLE 이벤트 전송
-        if (player) {
-          setTimeout(() => {
-            socket.emit('YOUR_ROLE', {
-              message: `${player.role} 입니다!`,
-              role: player.role,
-            });
-          }, 3000);
-        }
-      });
-    } catch (error: any) {
-      server.to(roomId).emit('error', { message: error.message });
     }
   }
 }
