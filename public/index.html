@@ -252,6 +252,10 @@
             console.log('게임 종료 데이터:', data);
           });
 
+          socket.on('system_message', function (data) {
+            appendChatMessage(`[공지] ${data.message}`, true);
+          });
+
           // 1차 투표 확정 버튼 클릭 이벤트
           document
             .getElementById('voteBtn')
