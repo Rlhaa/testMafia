@@ -194,6 +194,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       await this.gameService.killPlayers(data.roomId, data.players);
+      //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
       this.server.to(data.roomId).emit('PLAYERS_KILLED', {
         message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
         isAlive: false,

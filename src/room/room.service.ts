@@ -151,6 +151,7 @@ export class RoomService {
             socket.emit('YOUR_ROLE', {
               message: `${player.role} 입니다!`,
               role: player.role,
+              sender: player,
             });
           }, 3000);
         }
