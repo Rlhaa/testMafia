@@ -573,49 +573,44 @@ export class GameService {
     return result;
   }
 
-  // 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
+  /// 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
   async getPlayerByRole(roomId: string, role: string): Promise<number | null> {
-    const redisKey = `room:${roomId}:game`;
-    const playersData = await this.redisClient.hget(redisKey, 'players');
-    const players = JSON.parse(playersData || '[]');
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return null;
+
+    const gameData = await this.getGameData(roomId, gameId);
+    const players = gameData.players || [];
 
     const player = players.find((p: any) => p.role === role && p.isAlive);
     return player ? Number(player.id) : null;
   }
 
-  // 2. NIGHT 시작 - 게임 상태 변경
+  // 2. NIGHT 시작 - 게임 상태 변경 및 클라이언트 알림
   async startNightPhase(
     roomId: string,
-    gameId?: string,
   ): Promise<{ nightNumber: number; mafias: Player[]; dead: Player[] }> {
-    const redisKey = gameId
-      ? `room:${roomId}:game:${gameId}`
-      : `room:${roomId}:game`;
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
-    console.log(`방 ${roomId} - 밤으로 전환됨.`);
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    console.log(`🔹 방 ${roomId} - 밤으로 전환됨.`);
 
-    // 현재 게임 데이터를 가져올 필요가 있는 경우만 가져오기
-    let currentDay = 0;
-    if (gameId) {
-      const gameData = await this.getGameData(roomId, gameId);
-      currentDay = parseInt(gameData.day, 10) || 0;
-    }
-
-    // 게임의 phase를 `night`로 설정
+    // 게임의 phase를 'night'로 설정
     await this.redisClient.hset(redisKey, 'phase', 'night');
 
     // 밤 횟수 관리 (nightNumber 증가)
     const nightNumber = await this.getNightCount(roomId);
 
-    // 마피아 목록 및 사망자 목록 조회 (gameId가 존재할 때만 실행)
-    const mafias = gameId ? await this.getMafias(roomId, gameId) : [];
-    const dead = gameId ? await this.getDead(roomId, gameId) : [];
+    // 마피아 및 사망자 목록 조회
+    const mafias = await this.getMafias(roomId, gameId);
+    const dead = await this.getDead(roomId, gameId);
 
-    //  클라이언트에 밤 시작 이벤트 전송
+    // 클라이언트에 밤 시작 이벤트 전송
     this.nightResultService.announceNightStart(roomId, mafias, dead);
 
     console.log(
-      `방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
+      `✅ 방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
     );
 
     return { nightNumber, mafias, dead };
@@ -624,49 +619,48 @@ export class GameService {
   // 3. 마피아 공격 대상 저장
   async selectMafiaTarget(
     roomId: string,
-    userId: number | string,
-    targetUserId: number | string,
+    userId: number,
+    targetUserId: number,
   ): Promise<void> {
-    const userIdNum = Number(userId);
-    const targetUserIdNum = Number(targetUserId);
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
-    const redisKey = `room:${roomId}:game`;
+    const redisKey = `room:${roomId}:game:${gameId}`;
     await this.redisClient.hset(
       redisKey,
       'mafiaTarget',
-      targetUserIdNum.toString(),
+      targetUserId.toString(),
     );
 
-    console.log(`마피아(${userIdNum})가 ${targetUserIdNum}를 대상으로 선택함.`);
+    console.log(`🔫 마피아(${userId})가 ${targetUserId}를 대상으로 선택함.`);
   }
 
   // 4. 경찰 조사 대상 저장
-  async savePoliceTarget(
-    roomId: string,
-    targetUserId: number | string,
-  ): Promise<void> {
-    const targetUserIdNum = Number(targetUserId);
-    const redisKey = `room:${roomId}:game`;
+  async savePoliceTarget(roomId: string, targetUserId: number): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
+    const redisKey = `room:${roomId}:game:${gameId}`;
     await this.redisClient.hset(
       redisKey,
       'policeTarget',
-      targetUserIdNum.toString(),
+      targetUserId.toString(),
     );
   }
 
   // 5. 의사 보호 대상 저장
-  async saveDoctorTarget(
-    roomId: string,
-    targetUserId: number | string,
-  ): Promise<void> {
-    const targetUserIdNum = Number(targetUserId);
-    const redisKey = `room:${roomId}:game`;
+  async saveDoctorTarget(roomId: string, targetUserId: number): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
+    const redisKey = `room:${roomId}:game:${gameId}`;
     await this.redisClient.hset(
       redisKey,
       'doctorTarget',
-      targetUserIdNum.toString(),
+      targetUserId.toString(),
     );
   }
 
@@ -676,15 +670,18 @@ export class GameService {
     targetUserId: number | null;
     role: string | null;
   }> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return { policeId: null, targetUserId: null, role: null };
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
     const policeId = await this.getPlayerByRole(roomId, 'police');
     if (!policeId) return { policeId: null, targetUserId: null, role: null };
 
-    const redisKey = `room:${roomId}:game`;
     const policeTarget = await this.redisClient.hget(redisKey, 'policeTarget');
     if (!policeTarget) return { policeId, targetUserId: null, role: null };
 
-    const playersData = await this.redisClient.hget(redisKey, 'players');
-    const players = JSON.parse(playersData || '[]');
+    const gameData = await this.getGameData(roomId, gameId);
+    const players = gameData.players || [];
 
     const targetPlayer = players.find(
       (p: any) => p.id === Number(policeTarget),
@@ -694,11 +691,15 @@ export class GameService {
     return { policeId, targetUserId: Number(policeTarget), role };
   }
 
-  // 7. 밤 결과 처리
+  // 7. 밤 결과 처리 (마피아 공격 결과 반영)
   async processNightResult(
     roomId: string,
   ): Promise<{ killedUserId: number | null; details: string }> {
-    const redisKey = `room:${roomId}:game`;
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
 
     const mafiaTarget = await this.redisClient.hget(redisKey, 'mafiaTarget');
     const doctorTarget = await this.redisClient.hget(redisKey, 'doctorTarget');
@@ -717,6 +718,7 @@ export class GameService {
       await this.markPlayerAsDead(roomId, Number(mafiaTarget));
     }
 
+    // 게임 종료 체크
     const endCheck = await this.checkEndGame(roomId);
     if (endCheck.isGameOver) {
       await this.endGame(roomId);
@@ -727,9 +729,13 @@ export class GameService {
 
   // 8. 플레이어 사망 처리
   async markPlayerAsDead(roomId: string, playerId: number): Promise<void> {
-    const redisKey = `room:${roomId}:game`;
-    const playersData = await this.redisClient.hget(redisKey, 'players');
-    const players = JSON.parse(playersData || '[]');
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players = gameData.players || [];
 
     const player = players.find((p: any) => p.id === playerId);
     if (player) player.isAlive = false;
@@ -739,7 +745,11 @@ export class GameService {
 
   // 9. 밤 횟수 관리
   async getNightCount(roomId: string): Promise<number> {
-    const redisKey = `room:${roomId}:game`;
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId)
+      throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
     const nightNumber = await this.redisClient.hget(redisKey, 'nightNumber');
     const newNightCount = nightNumber ? parseInt(nightNumber) + 1 : 1;
 

@@ -315,6 +315,13 @@
             alert('게임 에러: ' + data.message);
           });
 
+          socket.on('NIGHT:START:SIGNAL', function () {
+            console.log('NIGHT:START:SIGNAL 클라이언트로 전송됨');
+            socket.emit('NIGHT:START', {
+              roomId: roomId,
+            });
+          });
+
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
           socket.on('gameEnd', function (data) {
             // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
@@ -323,13 +330,14 @@
             console.log('게임 종료 데이터:', data);
           });
 
-          socket.on('NIGHT:START', function (data) {
-            console.log('NIGHT:START 이벤트 수신:', data);
+          // 🌓 밤 시작 신호를 감지하여 UI를 변경
+          socket.on('NIGHT:START:SIGNAL', function (data) {
+            console.log('🌙 NIGHT:START:SIGNAL 이벤트 수신:', data);
 
             // 메시지를 채팅창에 출력
-            appendChatMessage(`[SYSTEM] ${data.message}`, true);
+            appendChatMessage(`[SYSTEM] 밤 단계로 전환됩니다...`, true);
 
-            // UI 변경 - 배경 어둡게 변경
+            // 배경 색 변경 (밤 테마)
             document.body.style.backgroundColor = 'black';
 
             // 컨테이너 배경 변경 (밤 테마 적용)
@@ -341,18 +349,11 @@
             if (occupantContainer)
               occupantContainer.style.backgroundColor = '#2c3e50';
 
-            // 모든 버튼 비활성화 (투표 버튼 숨기기)
+            // 투표 관련 버튼 숨기기
             document.getElementById('firstVoteContainer').style.display =
               'none';
             document.getElementById('secondVoteContainer').style.display =
               'none';
-
-            // 역할별 능력 버튼 초기화
-            document.getElementById('roleActionContainer').style.display =
-              'block';
-            document.getElementById('mafiaActionBtn').style.display = 'none';
-            document.getElementById('policeActionBtn').style.display = 'none';
-            document.getElementById('doctorActionBtn').style.display = 'none';
 
             // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
             if (currentUserRole === 'mafia') {
@@ -360,22 +361,16 @@
                 `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
                 true,
               );
-              document.getElementById('mafiaActionBtn').style.display =
-                'inline-block';
             } else if (currentUserRole === 'police') {
               appendChatMessage(
                 `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
                 true,
               );
-              document.getElementById('policeActionBtn').style.display =
-                'inline-block';
             } else if (currentUserRole === 'doctor') {
               appendChatMessage(
                 `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
                 true,
               );
-              document.getElementById('doctorActionBtn').style.display =
-                'inline-block';
             } else {
               appendChatMessage(
                 `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
@@ -384,18 +379,32 @@
             }
           });
 
-          // VOTE:SECOND:END 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
-          socket.on('VOTE:SECOND:END', function (data) {
-            console.log('VOTE:SECOND:END 이벤트 수신:', data);
-            var targetId = data.targetId;
-            var targetBtn = document.querySelector(
-              `.occupant-btn[data-userid="${targetId}"]`,
-            );
-            if (targetBtn) {
-              targetBtn.classList.remove('blink');
-              targetBtn.classList.remove('btn-outline-primary');
-              targetBtn.classList.add('btn-secondary');
-              targetBtn.disabled = true;
+          // 🔹 서버에서 방 전체에게 NIGHT_START 이벤트를 보내면 UI 업데이트
+          socket.on('ROOM:NIGHT_START', function (data) {
+            console.log('🌌 ROOM:NIGHT_START 이벤트 수신:', data);
+
+            // 메시지를 채팅창에 추가
+            appendChatMessage(`[SYSTEM] ${data.message}`, true);
+
+            // UI 테마 업데이트 (검은색 배경)
+            document.body.style.backgroundColor = 'black';
+
+            // 특정 역할이 있으면 안내 메시지 제공
+            if (currentUserRole === 'mafia') {
+              appendChatMessage(
+                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
+                true,
+              );
+            } else if (currentUserRole === 'police') {
+              appendChatMessage(
+                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
+                true,
+              );
+            } else if (currentUserRole === 'doctor') {
+              appendChatMessage(
+                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
+                true,
+              );
             }
           });
 

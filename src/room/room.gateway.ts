@@ -184,13 +184,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; phase: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
-    // 방의 플레이어 정보를 가져옵니다.
-    const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-    if (!currentGId) {
-      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-    }
-
-    await this.gameService.startNightPhase(data.roomId, currentGId); // 데이터베이스 업데이트
+    await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
     this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
   }
 
@@ -345,9 +339,12 @@ export class RoomGateway implements OnGatewayDisconnect {
           `플레이어 ${targetId}가 사망 처리되었습니다.`,
         );
 
-        this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
-          targetId,
-        });
+        // this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
+        //   targetId,
+        // });
+        // console.log('VOTE:SECOND:DEAD: 클라이언트로 수신됨');
+        this.server.to(data.roomId).emit('NIGHT:START:SIGNAL');
+        console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
       }
 
       //  게임 종료 체크
@@ -358,9 +355,14 @@ export class RoomGateway implements OnGatewayDisconnect {
         return;
       }
 
-      //  밤 페이즈로 이동
-      this.server.to(data.roomId).emit('NIGHT:PHASE', {
-        message: '밤이 찾아옵니다.',
+      // ✅ **밤 단계 시작 - `startNightPhase` 호출**
+      console.log(`🌙 NIGHT:START 이벤트 실행 - 방 ${data.roomId}`);
+      const nightResult = await this.gameService.startNightPhase(data.roomId);
+
+      this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
+        roomId: data.roomId,
+        nightNumber: nightResult.nightNumber,
+        message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
       });
 
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
@@ -398,19 +400,34 @@ export class RoomGateway implements OnGatewayDisconnect {
   }
 
   // 1. 밤 시작 이벤트 처리
-  @SubscribeMessage('START:NIGHT')
+  @SubscribeMessage('NIGHT:START')
   async handleNightStart(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
+    console.log('🌙 NIGHT:START 이벤트 수신됨', data.roomId);
     try {
-      const nightNumber = await this.gameService.startNightPhase(data.roomId);
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
+      const nightPhase = await this.gameService.startNightPhase(data.roomId);
+
+      // 모든 플레이어에게 밤 시작 이벤트 전달
       this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
         roomId: data.roomId,
-        nightNumber,
+        nightNumber: nightPhase.nightNumber,
         message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
       });
+
+      console.log(
+        `🌌 Room ${data.roomId} - Night ${nightPhase.nightNumber} 시작됨`,
+      );
     } catch (error) {
+      console.error('🚨 NIGHT:START 처리 중 오류 발생', error);
       client.emit('error', { message: '밤 시작 처리 중 오류 발생.' });
     }
   }
@@ -419,21 +436,21 @@ export class RoomGateway implements OnGatewayDisconnect {
   @SubscribeMessage('ACTION:MAFIA_TARGET')
   async handleMafiaTarget(
     @MessageBody()
-    data: {
-      roomId: string;
-      userId: number | string;
-      targetUserId: number | string;
-    },
+    data: { roomId: string; userId: number; targetUserId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
 
       await this.gameService.selectMafiaTarget(
         data.roomId,
-        userId,
-        targetUserId,
+        data.userId,
+        data.targetUserId,
       );
       client.emit('ACTION:MAFIA_TARGET', { message: '마피아 대상 선택 완료' });
     } catch (error) {
@@ -441,85 +458,64 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 3. 의사 보호 이벤트 처리 (결과는 의사에게만 전송)
+  // 3. 의사 보호 이벤트 처리
   @SubscribeMessage('ACTION:DOCTOR_TARGET')
   async handleDoctorTarget(
     @MessageBody()
-    data: {
-      roomId: string;
-      userId?: number | string;
-      targetUserId?: number | string;
-    },
+    data: { roomId: string; userId: number; targetUserId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
-          message: '의사 보호 대상이 올바르게 제공되지 않았습니다.',
-        });
-        return;
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
       }
 
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
-
-      if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
-          message: '의사 보호 대상 ID가 올바르지 않습니다.',
-        });
-        return;
-      }
-
-      await this.gameService.saveDoctorTarget(data.roomId, targetUserId);
+      await this.gameService.saveDoctorTarget(data.roomId, data.targetUserId);
       client.emit('ACTION:DOCTOR_TARGET', { message: '보호 대상 선택 완료' });
     } catch (error) {
       client.emit('error', { message: '의사 보호 처리 중 오류 발생.' });
     }
   }
 
-  // 4. 경찰 조사 이벤트 처리 (결과는 경찰에게만 전송)
+  // 4. 경찰 조사 이벤트 처리
   @SubscribeMessage('ACTION:POLICE_TARGET')
   async handlePoliceTarget(
     @MessageBody()
-    data: {
-      roomId: string;
-      userId?: number | string;
-      targetUserId?: number | string;
-    },
+    data: { roomId: string; userId: number; targetUserId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
-          message: '경찰 조사 대상이 올바르게 제공되지 않았습니다.',
-        });
-        return;
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
       }
 
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
-
-      if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
-          message: '경찰 조사 대상 ID가 올바르지 않습니다.',
-        });
-        return;
-      }
-
-      await this.gameService.savePoliceTarget(data.roomId, targetUserId);
+      await this.gameService.savePoliceTarget(data.roomId, data.targetUserId);
       client.emit('ACTION:POLICE_TARGET', { message: '조사 대상 선택 완료' });
     } catch (error) {
       client.emit('error', { message: '경찰 조사 처리 중 오류 발생.' });
     }
   }
 
-  // 5. 경찰 조사 결과 전송 (경찰에게만 전달)
+  // 5. 경찰 조사 결과 전송
   @SubscribeMessage('REQUEST:POLICE_RESULT')
   async handlePoliceResult(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
     try {
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
       const result = await this.gameService.getPoliceResult(data.roomId);
       if (!result.policeId) {
         client.emit('error', { message: '경찰이 존재하지 않습니다.' });
@@ -540,28 +536,52 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 6. 밤 결과 처리 후 발표 (모든 플레이어에게 알림)
+  // 6. 밤 결과 처리 후 발표
   @SubscribeMessage('PROCESS:NIGHT_RESULT')
   async handleNightResult(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const result = await this.gameService.processNightResult(data.roomId);
+      console.log(`🌙 Room ${data.roomId} - NIGHT RESULT PROCESSING`);
 
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
+      // 밤 결과 처리
+      const result = await this.gameService.processNightResult(data.roomId);
+      console.log(`🛑 밤 결과:`, result);
+
+      // 게임 종료 체크
       const endCheck = await this.gameService.checkEndGame(data.roomId);
       if (endCheck.isGameOver) {
+        console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
         const endResult = await this.gameService.endGame(data.roomId);
         this.server.to(data.roomId).emit('gameEnd', endResult);
         return;
       }
 
+      // 밤 결과 브로드캐스트
       this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
         roomId: data.roomId,
         result,
-        message: `밤 결과: ${result.details}`,
+        message: `🌙 밤 결과: ${result.details}`,
       });
+
+      // 자동으로 밤 시작 신호 전송 (UI에서 이벤트 처리 가능)
+      console.log(`🌌 밤 단계로 자동 전환 시작 - Room: ${data.roomId}`);
+      this.server.to(data.roomId).emit('NIGHT:START:SIGNAL', {
+        message: '밤 단계로 자동 전환됩니다...',
+      });
+
+      // 새로운 밤 페이즈 시작 (마피아, 경찰, 의사 행동 준비)
+      await this.gameService.startNightPhase(data.roomId);
     } catch (error) {
+      console.error(`🚨 NIGHT RESULT ERROR:`, error);
       client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
     }
   }
