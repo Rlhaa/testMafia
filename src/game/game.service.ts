@@ -322,17 +322,17 @@ export class GameService {
   //getMafias
   //마피아를 배정받은 사람들을 구합니다.
   //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
-  async startNightPhase(roomId: string, gameId: string): Promise<number> {
-    // 들어온 인자로 레디스 키 구성
-    const redisKey = `room:${roomId}:game:${gameId}`;
-    // 현재 게임 데이터를 get
-    const gameData = await this.getGameData(roomId, gameId);
+  // async startNightPhase(roomId: string, gameId: string): Promise<number> {
+  //   // 들어온 인자로 레디스 키 구성
+  //   const redisKey = `room:${roomId}:game:${gameId}`;
+  //   // 현재 게임 데이터를 get
+  //   const gameData = await this.getGameData(roomId, gameId);
 
-    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
-    let currentDay = parseInt(gameData.day, 10) || 0;
-    await this.redisClient.hset(redisKey, 'phase', 'night');
-    return currentDay;
-  }
+  //   // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
+  //   let currentDay = parseInt(gameData.day, 10) || 0;
+  //   await this.redisClient.hset(redisKey, 'phase', 'night');
+  //   return currentDay;
+  // }
 
   //수신자: 마피아
   async getMafias(roomId: string, gameId: string) {
@@ -586,11 +586,9 @@ export class GameService {
     // 밤 횟수 관리 (nightNumber 증가)
     const nightNumber = await this.getNightCount(roomId);
 
-    // 마피아 목록 조회
-    const mafias = await this.getMafias(roomId, gameId);
-
-    // 사망자 목록 조회
-    const dead = await this.getDead(roomId, gameId);
+    // 마피아 목록 및 사망자 목록 조회 (gameId가 존재할 때만 실행)
+    const mafias = gameId ? await this.getMafias(roomId, gameId) : [];
+    const dead = gameId ? await this.getDead(roomId, gameId) : [];
 
     return { nightNumber, mafias, dead };
   }
