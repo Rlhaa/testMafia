@@ -51,32 +51,34 @@ export class RoomGateway implements OnGatewayDisconnect {
     });
   }
 
-  //발신인 검증, 함수화 가능
-  //나중에 생각하자
-  // async getSpeakerInfo(@MessageBody() data: { roomId: string; userId: number; message: string },
-  // @ConnectedSocket() client: Socket,) {
-  //   // 방의 플레이어 정보를 가져옵니다.
-  //   const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-  //   if (!currentGId) {
-  //     throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-  //   }
-  //   const gameData = await this.gameService.getGameData(
-  //     data.roomId,
-  //     currentGId,
-  //   );
-  //   const players: Player[] = gameData.players
-  //     ? JSON.parse(gameData.players)
-  //     : [];
+  //방 아이디로 게임 아이디 받아오기
+  async getCurrentGameId(roomId: string) {
+    const currentGameId = await this.gameService.getCurrentGameId(roomId);
+    if (!currentGameId) {
+      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+    }
+    return currentGameId;
+  }
 
-  //   // 메시지를 보낸 사용자의 정보를 찾습니다.
-  //   const sender = players.find((player) => player.id === data.userId);
+  //게임 아이디와 방 아이디로 게임 데이터 받아오기
+  async getGameData(roomId: string, gameId: string) {
+    return await this.gameService.getGameData(roomId, gameId);
+  }
 
-  //   if (!sender) {
-  //     client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-  //     return;
-  //   }
-  // }
-  //
+  //발신인 정보 받아오기
+  async getSpeakerInfo(roomId: string, userId: number) {
+    // 방의 플레이어 정보를 가져옵니다.
+    const gameId = await this.getCurrentGameId(roomId);
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 메시지를 보낸 사용자의 정보를 찾습니다.
+    const sender = players.find((player) => player.id === userId);
+    if (!sender) {
+      throw new BadRequestException('발신자를 찾을 수 없습니다.');
+    }
+    return sender;
+  }
 
   @SubscribeMessage('chatDead')
   async handleChatDead(
@@ -85,23 +87,10 @@ export class RoomGateway implements OnGatewayDisconnect {
   ): Promise<void> {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!currentGId) {
-        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-      }
-
-      const gameData = await this.gameService.getGameData(
-        data.roomId,
-        currentGId,
-      );
-      const players: Player[] = gameData.players;
+      const currentGId = await this.getCurrentGameId(data.roomId);
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
-      const sender = players.find((player) => player.id === data.userId);
-      if (!sender) {
-        client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-        return;
-      }
+      const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 죽은 플레이어들만 필터링합니다.
       const deadPlayers = await this.gameService.getDead(
@@ -116,7 +105,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         );
         if (deadPlayerSocketId) {
           this.server.to(deadPlayerSocketId).emit('message', {
-            sender: data.userId,
+            sender: sender.id,
             message: data.message,
           });
           messageSentToDeadPlayers = true;
@@ -126,7 +115,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         //같은 게임 내에서 죽은 자들만 소통 가능한 채팅방과 마피아끼리만 대화 가능한 방을 별도로 파서 운영하는 건?
         if (!messageSentToDeadPlayers) {
           this.server.to(data.roomId).emit('message', {
-            sender: data.userId,
+            sender: sender.id,
             message: data.message,
           });
         }
@@ -146,23 +135,11 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!currentGId) {
-        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-      }
-
-      const gameData = await this.gameService.getGameData(
-        data.roomId,
-        currentGId,
-      );
-      const players: Player[] = gameData.players;
+      const currentGId = await this.getCurrentGameId(data.roomId);
+      const gameData = await this.getGameData(data.roomId, currentGId);
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
-      const sender = players.find((player) => player.id === data.userId);
-      if (!sender) {
-        client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-        return;
-      }
+      const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 마피아인 플레이어만 필터링합니다.
       const mafias = await this.gameService.getMafias(data.roomId, currentGId);
@@ -174,7 +151,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
           this.server.to(mafiaPlayerSocketId).emit('message', {
-            sender: data.userId,
+            sender: sender.id,
             message: data.message,
           });
           messageSentToMafias = true; // 마피아에게 메시지를 보냈음을 기록
@@ -183,7 +160,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       // 마피아에게 메시지를 보냈다면 방의 모든 클라이언트에게는 보내지 않음
       if (!messageSentToMafias) {
         this.server.to(data.roomId).emit('message', {
-          sender: data.userId,
+          sender: sender.id,
           message: data.message,
         });
       }
