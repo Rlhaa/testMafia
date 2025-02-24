@@ -327,7 +327,12 @@ export class RoomGateway implements OnGatewayDisconnect {
           data.roomId,
           `플레이어 ${targetId}가 사망 처리되었습니다.`,
         );
-        this.server.to(data.roomId).emit('VOTE:SECOND:END', {
+        this.roomService.sendSystemMessage(
+          this.server,
+          data.roomId,
+          `밤이 찾아옵니다..`,
+        );
+        this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
           targetId,
         });
       }
