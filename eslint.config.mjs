@@ -36,6 +36,7 @@ export default tseslint.config(
           endOfLine: 'auto',
         },
       ],
+      '@typescript-eslint/no-unsafe-assignment': 'error',
     },
   },
 );

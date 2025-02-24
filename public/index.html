@@ -244,6 +244,14 @@
             alert('게임 에러: ' + data.message);
           });
 
+          // 추가된 부분: gameEnd 이벤트 핸들러 등록
+          socket.on('gameEnd', function (data) {
+            // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
+            appendChatMessage('게임 종료: ' + data.message);
+            document.getElementById('gameStatus').textContent = data.message;
+            console.log('게임 종료 데이터:', data);
+          });
+
           // 1차 투표 확정 버튼 클릭 이벤트
           document
             .getElementById('voteBtn')

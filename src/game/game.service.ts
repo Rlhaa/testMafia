@@ -382,4 +382,58 @@ export class GameService {
 
   //   console.log(`게임 ${gameId} 데이터 삭제 완료`);
   // }
+  async endGame(roomId: string): Promise<any> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      console.log(`room:${roomId}에 진행 중인 게임이 없음.`);
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+
+    const gameKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+
+    const players: Player[] = gameData.players;
+
+    // 생존자 카운트
+    const aliveMafias = players.filter(
+      (player) => player.role === 'mafia' && player.isAlive,
+    ).length;
+    const aliveCitizens = players.filter(
+      (player) => player.role !== 'mafia' && player.isAlive,
+    ).length;
+
+    let winningTeam = '';
+    if (aliveMafias >= aliveCitizens) {
+      winningTeam = 'mafia';
+    } else if (aliveMafias === 0) {
+      winningTeam = 'citizens';
+    } else {
+      return { message: '게임이 아직 끝나지 않았습니다.' };
+    }
+
+    // 최종 상태 데이터 구성
+    const finalState = {
+      players: players.map((player) => ({
+        userId: player.id,
+        role: player.role,
+        alive: player.isAlive,
+      })),
+    };
+
+    // Redis 데이터 삭제 (게임 종료)
+    await this.redisClient.del(gameKey);
+    await this.redisClient.del(`room:${roomId}:currentGameId`);
+
+    const result = {
+      roomId,
+      winningTeam,
+      finalState,
+      message: `게임 종료: ${winningTeam === 'mafia' ? '마피아' : '시민'} 승리!`,
+    };
+
+    // WebSocket 이벤트 전송 코드는 제거하고, Gateway에서 처리하도록 합니다.
+    // this.server.to(roomId).emit('gameEnd', result);
+
+    return result;
+  }
 }

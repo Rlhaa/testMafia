@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -334,5 +335,18 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     const payload = { roomId, message, ...additionalData };
     this.server.to(roomId).emit(event, payload);
+  }
+
+  @SubscribeMessage('endGame')
+  async handleEndGame(
+    @MessageBody() data: { roomId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      const result = await this.gameService.endGame(data.roomId);
+      this.server.to(data.roomId).emit('gameEnd', result);
+    } catch (error) {
+      client.emit('error', { message: '게임 종료 처리 중 오류 발생.' });
+    }
   }
 }
