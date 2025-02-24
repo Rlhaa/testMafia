@@ -120,6 +120,14 @@
         color: #2980b9;
         font-weight: bold;
       }
+      
+      .red-message { 
+          color: red;
+      }
+
+      .purple-message {
+          color: purple;
+      }
 
       #voteBtn,
       #executeBtn,
@@ -127,6 +135,7 @@
         margin-top: 10px;
         margin-right: 10px;
       }
+      
 
       @keyframes blink {
         0% {
@@ -155,7 +164,7 @@
         .occupant-container {
           width: 100%;
         }
-      }
+      } 
     </style>
   </head>
 
@@ -277,16 +286,16 @@
           });
 
           socket.on('message', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
+                appendChatMessage('[' + data.sender + '] ' + data.message);
+            });
 
           socket.on('CHAT:DEAD', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
+                appendChatMessage('[' + data.sender + '] ' + data.message, 'CHAT:DEAD');
+            });
 
           socket.on('CHAT:MAFIA', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
+                appendChatMessage('[' + data.sender + '] ' + data.message, 'CHAT:MAFIA');
+            });
 
           socket.on('system_message', function (data) {
             appendChatMessage(`[공지] ${data.message}`, true);
@@ -298,6 +307,7 @@
 
           socket.on('YOUR_ROLE', function (data) {
             currentUserRole = data.role;
+            currentUserIsAlive = data.isAlive
             appendChatMessage(data.message, true);
           });
 
@@ -338,6 +348,11 @@
           document
             .getElementById('voteBtn')
             .addEventListener('click', function () {
+              if(!currentUserIsAlive){
+                alert('죽은 사람은 투표를 할수 없습니다.')
+                return
+              }
+
               if (!selectedTargetId) {
                 alert('투표할 대상을 선택하세요.');
                 return;
@@ -464,6 +479,7 @@
                     },
                   );
                 });
+
               document
                 .getElementById('killPlayersBtn')
                 .addEventListener('click', function (data) {
@@ -478,19 +494,39 @@
                 });
             }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
         });
-      // 채팅 메시지 추가 함수
-      function appendChatMessage(message, isRole) {
-        var chatMessagesDiv = document.getElementById('chatMessages');
-        var messageElement = document.createElement('div');
-        if (isRole) {
-          messageElement.classList.add('role-message');
-        }
-        messageElement.textContent = message;
-        chatMessagesDiv.appendChild(messageElement);
+      // 채팅 메시지 추가 함수(기존)
+      // function appendChatMessage(message, isRole) {
+      //   var chatMessagesDiv = document.getElementById('chatMessages');
+      //   var messageElement = document.createElement('div');
+      //   if (isRole) {
+      //     messageElement.classList.add('role-message');
+      //   }
+      //   messageElement.textContent = message;
+      //   chatMessagesDiv.appendChild(messageElement);
 
-        // 스크롤 위치 업데이트
-        chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
-      }
+      //   // 스크롤 위치 업데이트
+      //   chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+      // }
+      function appendChatMessage(message, isRole) {
+          var chatMessagesDiv = document.getElementById('chatMessages');
+          var messageElement = document.createElement('div');
+
+          if (isRole === 'role') {
+            messageElement.classList.add('role-message');
+          } else if (isRole === 'CHAT:DEAD') {
+            messageElement.classList.add('red-message');
+          } else if (isRole === 'CHAT:MAFIA') {
+            messageElement.classList.add('purple-message');
+          } 
+
+          messageElement.textContent = message;
+          chatMessagesDiv.appendChild(messageElement);
+
+          // 스크롤 위치 업데이트
+          chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        }
+
+
 
       // 채팅 메시지 전송 함수
       function sendChatMessage() {
