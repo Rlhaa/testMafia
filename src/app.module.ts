@@ -4,6 +4,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { GameModule } from './game/game.module';
 import { RoomModule } from './room/room.module';
+import { NoticeModule } from './notice/notice.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { RoomModule } from './room/room.module';
     }),
     GameModule,
     RoomModule,
+    NoticeModule,
   ],
   controllers: [],
   providers: [],

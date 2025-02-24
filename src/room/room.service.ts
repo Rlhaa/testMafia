@@ -8,8 +8,8 @@ import { Redis } from 'ioredis';
 import { Server, Socket, RemoteSocket } from 'socket.io';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { GameService } from '../game/game.service';
+import { NightResultService } from 'src/notice/night-result.service';
 
-// 플레이어 객체 구조 정의
 interface Player {
   id: number;
   role?: string;
@@ -26,7 +26,6 @@ export class RoomService {
   // 각 방의 ID(문자열)를 해당 방의 게임 시작 타이머와 연결
   // ex)방 ID가 "1"이고, 타이머 객체가 setTimeout으로 생성된 경우,
   // 이 매핑은 roomCountdownTimers.set("1", timerObject)로 저장
-
   private roomCountdownTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(
@@ -35,6 +34,8 @@ export class RoomService {
     private readonly redisClient: Redis,
     // 게임 관련 메서드 주입을 위해 GameService 주입 받음
     private readonly gameService: GameService,
+    // [수정] NightResultService 주입: 모든 공지 처리를 이 서비스에서 담당
+    private readonly nightResultService: NightResultService,
   ) {}
 
   // -------- 헬퍼함수 --------
@@ -148,8 +149,8 @@ export class RoomService {
 
       const updatedPlayers = await this.gameService.assignRoles(roomId, gameId);
 
-      this.sendSystemMessage(
-        server,
+      // [수정] 기존 sendSystemMessage 대신 NightResultService의 announceSystemMessage 사용
+      this.nightResultService.announceSystemMessage(
         roomId,
         '마스터가 직업을 분배중입니다. 당신의 직업은...',
       );
@@ -161,11 +162,14 @@ export class RoomService {
           (p: Player) => Number(p.id) === Number(socketUserId),
         );
 
+        console.log(`player 의 데이터 입니다 ${JSON.stringify(player)}`);
+
         if (player) {
           setTimeout(() => {
             socket.emit('YOUR_ROLE', {
               message: `${player.role} 입니다!`,
               role: player.role,
+              isAlive: player.isAlive,
             });
           }, 3000);
         }
@@ -183,6 +187,9 @@ export class RoomService {
     }
   }
 
+  getUserSocketMap(userId: number) {
+    return this.userSocketMap.get(userId);
+  }
   // joinRoom: 클라이언트의 방 입장 및 관련 비즈니스 로직 실행
   // 서버 인스턴스, 클라이언트 소켓, 방 ID, 사용자 ID를 매개변수로 받음
   async joinRoom(
@@ -202,7 +209,7 @@ export class RoomService {
     // userId: 42가 다시한번 접속하여 joinroom 이벤트가 발생한다면 조건문 조건 true >> 조건문에 걸림
     if (this.userSocketMap.has(userId)) {
       // this.userSocketMap.get(42)를 호출하여, 이전에 저장된 소켓 ID인 'socket_001'을 가져옴
-      const previousSocketId = this.userSocketMap.get(userId)!;
+      const previousSocketId = this.getUserSocketMap(userId)!;
 
       // 서버의 소켓 목록에서 server.sockets.sockets.get('socket_001')를 통해 실제 소켓 객체 찾음
       const previousSocket = server.sockets.sockets.get(previousSocketId);
@@ -229,12 +236,8 @@ export class RoomService {
     // 클라이언트를 해당 방에 입장시키고 userSocketMap에 소켓 매핑 정보를 저장
     client.join(roomId);
     this.userSocketMap.set(userId, client.id);
-    this.sendSystemMessage(
-      server,
-      roomId,
-      // 추후 유저 닉네임으로 변경
-      `${userId}번 유저가 ${roomId}번 방에 접속하였습니다.`,
-    );
+    // [수정] 접속 공지: 기존 sendSystemMessage 대신 NightResultService의 announceJoinRoom 호출
+    this.nightResultService.announceJoinRoom(roomId, userId);
 
     // 접속 처리 후 최신 방 정보 조회 하여 ROOM:UPDATED 이벤트 전송
     const roomData = await this.getRoomInfo(roomId);
@@ -248,11 +251,8 @@ export class RoomService {
         this.roomCountdownTimers.delete(roomId);
       }, 10000);
       this.roomCountdownTimers.set(roomId, timer);
-      this.sendSystemMessage(
-        server,
-        roomId,
-        '방이 꽉 찼습니다. 10초 후 게임이 시작됩니다.',
-      );
+      // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
+      this.nightResultService.announceRoomFull(roomId);
     }
   }
 
@@ -267,12 +267,8 @@ export class RoomService {
     client.leave(roomId);
     // 매핑도 삭제
     this.userSocketMap.delete(userId);
-    // 시스템 메시지 헬퍼함수로 공지
-    this.sendSystemMessage(
-      server,
-      roomId,
-      `${userId}번이 ${roomId}번방에서 나갔습니다.`,
-    );
+    // [수정] 퇴장 공지: 기존 sendSystemMessage 대신 NightResultService의 announceLeaveRoom 호출
+    this.nightResultService.announceLeaveRoom(roomId, userId);
 
     // 제거 처리 후 현재 방 인원 업데이트 로직
     // 현재 방 정보 조회
@@ -297,11 +293,8 @@ export class RoomService {
       const timer = this.roomCountdownTimers.get(roomId)!;
       clearTimeout(timer);
       this.roomCountdownTimers.delete(roomId);
-      this.sendSystemMessage(
-        server,
-        roomId,
-        '인원이 줄어들어 게임 시작 타이머가 취소되었습니다.',
-      );
+      // [수정] 타이머 취소 공지: 기존 sendSystemMessage 대신 NightResultService의 announceCancelTimer 호출
+      this.nightResultService.announceCancelTimer(roomId);
     }
   }
 }
