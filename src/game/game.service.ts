@@ -1,6 +1,14 @@
-import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
+import { TimerService } from 'src/timer/timer.service';
+import { NightResultService } from 'src/notice/night-result.service';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -21,19 +29,61 @@ export interface Player {
 
 @Injectable()
 export class GameService {
+  private readonly logger = new Logger(GameService.name); //타이머 로그용 임시 추가
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
+    private readonly timerService: TimerService, // 타이머 테스트용
+    @Inject(forwardRef(() => NightResultService))
+    private readonly nightResultService: NightResultService, //
   ) {}
 
-  // 1. 첫번쨰 게임 생성 단계
-  // 새로운 게임을 초기 세팅 값 기준으로 생성하고 레디스에 저장
+  // ──────────────────────────────
+  // 유틸리티 메서드 (게임 ID 및 데이터 조회)
+  // ──────────────────────────────
+
+  // 현재 진행 중인 게임 ID 조회
+  async getCurrentGameId(roomId: string): Promise<string | null> {
+    const gameId = await this.redisClient.get(`room:${roomId}:currentGameId`);
+    if (gameId) {
+      return gameId;
+    }
+    console.log(`room:${roomId}:currentGameId 키가 없음. 게임 ID 검색 중...`);
+    const keys = await this.redisClient.keys(`room:${roomId}:game:*`);
+    if (keys.length === 0) return null;
+    const foundGameId = keys[0].split(':').pop() || null;
+    if (foundGameId) {
+      await this.redisClient.set(`room:${roomId}:currentGameId`, foundGameId);
+      console.log(`room:${roomId}의 현재 게임 ID를 복구: ${foundGameId}`);
+    }
+    return foundGameId;
+  }
+
+  // 특정 게임의 데이터 조회
+  async getGameData(roomId: string, gameId: string): Promise<any> {
+    if (!roomId || !gameId) {
+      throw new BadRequestException('roomId와 gameId가 필요합니다.');
+    }
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = (await this.redisClient.hgetall(redisKey)) || {};
+    if (Object.keys(gameData).length === 0) {
+      throw new BadRequestException('해당 게임 데이터가 존재하지 않습니다.');
+    }
+    gameData.players = gameData.players ? JSON.parse(gameData.players) : [];
+    return gameData;
+  }
+
+  // ──────────────────────────────
+  // 게임 초기화 및 상태 관리 메서드
+  // ──────────────────────────────
+
+  // 새로운 게임 생성 및 초기화
   async createGame(roomId: string): Promise<void> {
     if (!roomId) {
       throw new BadRequestException('roomId가 필요합니다.');
     }
-    const gameId = uuidv4(); // 고유 게임 ID 생성
-    const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
+    const gameId = uuidv4();
+    const redisKey = `room:${roomId}:game:${gameId}`;
     console.log('Game ID:', gameId);
     console.log('Redis Key:', redisKey);
 
@@ -42,7 +92,6 @@ export class GameService {
       `room:${roomId}`,
       'players',
     );
-
     let players: Player[] = [];
     if (roomPlayersData) {
       try {
@@ -52,7 +101,6 @@ export class GameService {
       }
     }
 
-    // 초기 게임 상태 구성
     const initialGameState = {
       day: '0',
       phase: 'morning',
@@ -64,71 +112,21 @@ export class GameService {
       players: JSON.stringify(players),
     };
 
-    // 레디스에 게임 데이터 저장
     await Promise.all(
       Object.entries(initialGameState).map(([field, value]) =>
         this.redisClient.hset(redisKey, field, value),
       ),
     );
 
-    // 현재 방에 진행 중인 게임 ID 저장
+    // 현재 진행 중인 게임 ID 저장
     await this.redisClient.set(`room:${roomId}:currentGameId`, gameId);
-
     console.log(`게임 ID ${gameId}가 방 ${roomId}에 저장되었습니다.`);
   }
 
-  // 2. 게임 데이터 조회 단계
-  // 특정 게임의 데이터를 레딧스에서 조회
-  async getGameData(roomId: string, gameId: string): Promise<any> {
-    if (!roomId || !gameId) {
-      throw new BadRequestException('roomId와 gameId가 필요합니다.');
-    }
-    const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    const gameData = (await this.redisClient.hgetall(redisKey)) || {};
-    if (Object.keys(gameData).length === 0) {
-      throw new BadRequestException('해당 게임 데이터가 존재하지 않습니다.');
-    }
-    // players 필드를 JSON 파싱하여 배열로 변환
-    gameData.players = gameData.players ? JSON.parse(gameData.players) : [];
-    return gameData;
-  }
-
-  // 3. 현재 진해중인 게임 ID 조회 시
-  // 현재 방에서 진행중인 게임의 ID를 가져오거나
-  async getCurrentGameId(roomId: string): Promise<string | null> {
-    // 현재 진행 중인 게임 ID 가져오기
-    const gameId = await this.redisClient.get(`room:${roomId}:currentGameId`);
-    if (gameId) {
-      return gameId;
-    }
-
-    // ===== 백업부분 =====
-    console.log(`room:${roomId}:currentGameId 키가 없음. 게임 ID 검색 중...`);
-
-    // `room:{roomId}:game:*` 패턴으로 게임 ID 검색 (백업 방법)
-    const keys = await this.redisClient.keys(`room:${roomId}:game:*`);
-
-    if (keys.length === 0) return null;
-
-    // 키의 형식이 room:{roomId}:game:{gameId}이므로 마지막 부분이 gameId
-    const foundGameId = keys[0].split(':').pop() || null;
-
-    if (foundGameId) {
-      // 다시 `currentGameId`를 저장하여 빠르게 접근 가능하도록 함
-      await this.redisClient.set(`room:${roomId}:currentGameId`, foundGameId);
-      console.log(`room:${roomId}의 현재 게임 ID를 복구: ${foundGameId}`);
-    }
-
-    return foundGameId;
-    // ===== 백업부분 =====
-  }
-
-  // 4. 역할 분배 단계
-  //  게임이 시작될 때 플레이어 수가 8명인지 확인한 후, 고정 역할 풀을 무작위로 섞어 각 플레이어에게 역할을 할당
-  //  역할 분배가 완료되면 업데이트된 플레이어 목록과 게임 phase 정보를 Redis에 저장하고, 업데이트된 배열을 반환
+  // 역할 분배
   async assignRoles(roomId: string, gameId: string): Promise<Player[]> {
-    const redisKey = `room:${roomId}:game:${gameId}`; // Redis 키 생성
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
     const requiredPlayers = 8;
     console.log('플레이어 수:', players.length);
@@ -138,7 +136,6 @@ export class GameService {
       );
     }
 
-    // 고정된 역할 풀: mafia 2, citizen 4, police 1, doctor 1
     const rolesPool = [
       'mafia',
       'mafia',
@@ -149,16 +146,15 @@ export class GameService {
       'police',
       'doctor',
     ];
-    rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
+    rolesPool.sort(() => Math.random() - 0.5);
 
     const updatedPlayers = players.map((player, index) => ({
-      ...player, // 기존 플레이어 데이터 전개
-      role: rolesPool[index], // 역할 할당
-      isAlive: true, // 초기 생존 상태 true 설정
+      ...player,
+      role: rolesPool[index],
+      isAlive: true,
     }));
     console.log('Updated Players:', updatedPlayers);
 
-    // 각 필드를 개별적으로 저장
     await Promise.all([
       this.redisClient.hset(
         redisKey,
@@ -168,34 +164,52 @@ export class GameService {
       this.redisClient.hset(redisKey, 'phase', 'rolesAssigned'),
     ]);
 
-    return updatedPlayers; // 역할 분배 완료된 플레이어 배열 반환
+    return updatedPlayers;
   }
 
-  //  5. 낮 시작 단계
-  //  게임의 낮 단계를 시작하고 투표를 초기화
+  // 낮 단계 시작 (day 증가 및 투표 초기화)
   async startDayPhase(roomId: string, gameId: string): Promise<number> {
-    // 들어온 인자로 레디스 키 구성
     const redisKey = `room:${roomId}:game:${gameId}`;
-
-    // 현재 게임 데이터를 get
     const gameData = await this.getGameData(roomId, gameId);
-
-    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
     let currentDay = parseInt(gameData.day, 10) || 0;
-
-    // day 값을 1 증가
     currentDay += 1;
-
-    // 게임 상태 업데이트: 새로운 day와 낮 단계("day")로 설정
     await this.redisClient.hset(redisKey, 'day', currentDay.toString());
     await this.redisClient.hset(redisKey, 'phase', 'day');
-
-    // 필요에 따라 투표 배열 초기화 (예: firstVote, secondVote)
     await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
     await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
 
+    this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
+      this.nightResultService.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
+    });
+
     return currentDay;
   }
+
+  // 플레이어 사망 처리
+  async killPlayers(roomId: string, playerIds: number[]): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+    const updatedPlayers = players.map((player) => {
+      if (playerIds.includes(player.id)) {
+        return { ...player, isAlive: false };
+      }
+      return player;
+    });
+    await this.redisClient.hset(
+      redisKey,
+      'players',
+      JSON.stringify(updatedPlayers),
+    );
+  }
+
+  // ──────────────────────────────
+  // 투표 관련 메서드
+  // ──────────────────────────────
 
   // 1차 투표 진행
   async handleFirstVoteProcess(
@@ -206,31 +220,22 @@ export class GameService {
     console.log(
       `handleFirstVoteProcess 요청 - roomId: ${roomId}, voterId: ${voterId}, targetId: ${targetId}`,
     );
-
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
-
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
     const gameKey = `room:${roomId}:game:${gameId}`;
 
-    // 현재 투표 데이터 가져오기
     const votes = await this.redisClient.get(firstVoteKey);
     let voteArray: { voterId: number; targetId: number }[] = votes
       ? JSON.parse(votes)
       : [];
 
-    // 자기 자신에게 투표 방지
     if (voterId === targetId) {
       console.warn(`사용자 ${voterId}가 자기 자신에게 투표하려고 시도함.`);
-      return {
-        success: false,
-        message: '자기 자신에게는 투표할 수 없습니다.',
-      };
+      return { success: false, message: '자기 자신에게는 투표할 수 없습니다.' };
     }
-
-    // 중복 투표 방지
     if (voteArray.some((vote) => vote.voterId === voterId)) {
       console.log('중복된 투표 감지(반영X)');
       return {
@@ -239,59 +244,40 @@ export class GameService {
       };
     }
 
-    // 생존한 플레이어 수 확인 (Redis에서 가져오기)
     const gameData = await this.redisClient.hget(gameKey, 'players');
     const alivePlayers = JSON.parse(gameData as string).filter(
       (p: any) => p.isAlive,
     );
-
-    // 투표 정보 저장 (검증 후)
     voteArray.push({ voterId, targetId });
     await this.redisClient.set(firstVoteKey, JSON.stringify(voteArray));
 
-    // 현재 투표한 인원 수 / 투표 가능한 인원 수 로그 출력
     console.log(
-      `현재 투표한 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
+      `1차 투표 완료 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
     );
-
-    // 모든 생존 플레이어가 투표 완료될 때까지 반환하지 않음
     if (voteArray.length !== alivePlayers.length) {
-      return {
-        success: true,
-        voteData: voteArray,
-        allVotesCompleted: false, // 아직 모든 투표가 완료되지 않음
-      };
+      return { success: true, voteData: voteArray, allVotesCompleted: false };
     }
-
-    // 모든 생존 플레이어가 투표 완료되었을 경우에만 반환
-    return {
-      success: true,
-      voteData: voteArray,
-      allVotesCompleted: true, // 모든 투표가 완료됨
-    };
+    return { success: true, voteData: voteArray, allVotesCompleted: true };
   }
 
-  async calculateVoteResult(roomId: string) {
+  // 1차 투표 결과 계산 및 저장 (동점이 아닐 경우)
+  async calculateFirstVoteResult(roomId: string) {
     console.log(`calculateVoteResult 실행 - roomId: ${roomId}`);
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
-
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
     const votes = await this.redisClient.get(firstVoteKey);
     if (!votes) {
       return { winnerId: null, voteCount: 0, tie: false, tieCandidates: [] };
     }
-
     const voteArray: { voterId: number; targetId: number }[] =
       JSON.parse(votes);
     const voteCount: Record<number, number> = {};
-
     voteArray.forEach((vote) => {
       voteCount[vote.targetId] = (voteCount[vote.targetId] || 0) + 1;
     });
-
     console.log(`투표 집계 결과:`, voteCount);
 
     let maxVotes = 0;
@@ -305,15 +291,16 @@ export class GameService {
       }
     });
 
-    // 동점이면 tie:true, 아니라면 tie:false
     if (candidates.length === 1) {
       console.log(`최다 득표자 확인 - winnerId: ${candidates[0]}`);
-      return {
-        winnerId: candidates[0],
-        voteCount: maxVotes,
-        tie: false,
-        tieCandidates: [],
-      };
+      const winnerId = candidates[0];
+      const gameKey = `room:${roomId}:game:${gameId}`;
+      await this.redisClient.hset(
+        gameKey,
+        'firstVoteWinner',
+        winnerId.toString(),
+      );
+      return { winnerId, voteCount: maxVotes, tie: false, tieCandidates: [] };
     } else {
       console.log(
         `동점 후보 발생 - 후보들: ${candidates.join(', ')}, 득표수: ${maxVotes}`,
@@ -369,17 +356,144 @@ export class GameService {
     return dead;
   }
 
+  // 2차 투표 진행
+  async handleSecondVoteProcess(
+    roomId: string,
+    voterId: number,
+    execute: boolean,
+  ) {
+    console.log(
+      `handleSecondVoteProcess 요청 - roomId: ${roomId}, voterId: ${voterId}, execute: ${execute}`,
+    );
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+    const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
+    const gameKey = `room:${roomId}:game:${gameId}`;
+
+    const votes = await this.redisClient.get(secondVoteKey);
+    let voteArray: { voterId: number; execute: boolean }[] = votes
+      ? JSON.parse(votes)
+      : [];
+
+    const gameData = await this.redisClient.hget(gameKey, 'players');
+    const alivePlayers = JSON.parse(gameData as string).filter(
+      (p: any) => p.isAlive,
+    );
+    voteArray.push({ voterId, execute });
+    await this.redisClient.set(secondVoteKey, JSON.stringify(voteArray));
+
+    console.log(
+      `2차 투표 완료 인원: ${voteArray.length} / 투표 가능 인원: ${alivePlayers.length}`,
+    );
+    if (voteArray.length !== alivePlayers.length) {
+      return { success: true, voteData: voteArray, allVotesCompleted: false };
+    }
+    return { success: true, voteData: voteArray, allVotesCompleted: true };
+  }
+
+  // 2차 투표 결과 계산
+  async calculateSecondVoteResult(roomId: string) {
+    console.log(`calculateSecondVoteResult 실행 - roomId: ${roomId}`);
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+    const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
+    const votes = await this.redisClient.get(secondVoteKey);
+    if (!votes) {
+      return { execute: false, voteCount: 0, tie: false };
+    }
+    const voteArray: { voterId: number; execute: boolean }[] =
+      JSON.parse(votes);
+    let executeCount = 0;
+    let surviveCount = 0;
+    voteArray.forEach((vote) => {
+      vote.execute ? executeCount++ : surviveCount++;
+    });
+    console.log(
+      `2차 투표 집계 결과: 사살(${executeCount}) vs 생존(${surviveCount})`,
+    );
+
+    const executeVoterIds = voteArray
+      .filter((vote) => vote.execute)
+      .map((vote) => vote.voterId);
+    const surviveVoterIds = voteArray
+      .filter((vote) => !vote.execute)
+      .map((vote) => vote.voterId);
+
+    if (executeCount > surviveCount) {
+      return {
+        execute: true,
+        voteCount: executeCount,
+        tie: false,
+        executeVoterIds,
+        surviveVoterIds,
+      };
+    } else if (executeCount < surviveCount) {
+      return {
+        execute: false,
+        voteCount: surviveCount,
+        tie: false,
+        executeVoterIds,
+        surviveVoterIds,
+      };
+    } else {
+      return {
+        execute: null,
+        voteCount: executeCount,
+        tie: true,
+        executeVoterIds,
+        surviveVoterIds,
+      };
+    }
+  }
+
+  // ──────────────────────────────
+  // 타겟 ID 관련 메서드 (1차 투표 결과 기반)
+  // ──────────────────────────────
+
+  // targetId 저장
+  async setTargetId(roomId: string, targetId: number): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+    const gameKey = `room:${roomId}:game:${gameId}`;
+    await this.redisClient.hset(gameKey, 'targetId', targetId.toString());
+    console.log(`게임: ${gameId}의 targetId: ${targetId} 레디스에 업데이트.`);
+  }
+
+  // targetId 조회
+  async getTargetId(roomId: string): Promise<number | null> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+    const gameKey = `room:${roomId}:game:${gameId}`;
+    const targetIdStr = await this.redisClient.hget(gameKey, 'targetId');
+    if (!targetIdStr) {
+      console.log(`게임 ${gameId}에 targetId가 설정되지 않았습니다.`);
+      return null;
+    }
+    const targetId = Number(targetIdStr);
+    console.log(`게임 ${gameId}에서 targetId ${targetId}를 불러왔습니다.`);
+    return targetId;
+  }
+
+  // ──────────────────────────────
+  // (필요시) 게임 종료 관련 메서드
+  // ──────────────────────────────
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
   //   if (!gameId) {
   //     console.log(`room:${roomId}에 진행 중인 게임이 없음.`);
   //     return;
   //   }
-
   //   const gameKey = `room:${roomId}:game:${gameId}`;
   //   await this.redisClient.del(gameKey);
   //   await this.redisClient.del(`room:${roomId}:currentGameId`);
-
   //   console.log(`게임 ${gameId} 데이터 삭제 완료`);
   // }
   async endGame(roomId: string): Promise<any> {
