@@ -228,13 +228,13 @@
           socket.on('message', function (data) {
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
-          // socket.on('CHAT:DEAD', function (data) {
-          //   appendChatMessage('[' + data.sender + '] ' + data.message);
-          // });
+          socket.on('CHAT:DEAD', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
 
-          // socket.on('CHAT:MAFIA', function (data) {
-          //   appendChatMessage('[' + data.sender + '] ' + data.message);
-          // });
+          socket.on('CHAT:MAFIA', function (data) {
+            appendChatMessage('[' + data.sender + '] ' + data.message);
+          });
           // 쓸데없는거 지워도 됨 마피아 끼리 채팅 , 죽은 사람 끼리 채팅 잘됨
           document
             .getElementById('sendBtn')
@@ -248,6 +248,10 @@
           socket.on('error', function (data) {
             alert('게임 에러: ' + data.message);
           });
+
+          socket.on('system_message', function (data) {
+            appendChatMessage(data.message, true);
+          })
 
           // 1차 투표 확정 버튼 클릭 이벤트
           document

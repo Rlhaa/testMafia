@@ -159,8 +159,6 @@ export class RoomService {
           (p: Player) => Number(p.id) === Number(socketUserId),
         );
 
-        console.log(`player 의 데이터 입니다 ${JSON.stringify(player)}`);
-
         if (player) {
           setTimeout(() => {
             socket.emit('YOUR_ROLE', {
