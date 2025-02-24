@@ -1,6 +1,14 @@
-import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
+import { TimerService } from 'src/timer/timer.service';
+import { NightResultService } from 'src/notice/night-result.service';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -21,9 +29,13 @@ export interface Player {
 
 @Injectable()
 export class GameService {
+  private readonly logger = new Logger(GameService.name); //타이머 로그용 임시 추가
   constructor(
     @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis, // ioredis 클라이언트 주입
+    private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
+    private readonly timerService: TimerService, // 타이머 테스트용
+    @Inject(forwardRef(() => NightResultService))
+    private readonly nightResultService: NightResultService, //
   ) {}
 
   // ──────────────────────────────
@@ -168,6 +180,11 @@ export class GameService {
     await this.redisClient.hset(redisKey, 'phase', 'day');
     await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
     await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
+
+    this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
+      this.nightResultService.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
+    });
+
     return currentDay;
   }
 

@@ -41,6 +41,11 @@ export class NightResultService {
     });
   }
 
+  announceFirstVoteStart(roomId: string, dayNumber: number): void {
+    const message = `${dayNumber}번째 낮 대상자 투표가 시작 되었습니다., 15초 후 마감 됩니다.`;
+    this.announceSystemMessage(roomId, message);
+  }
+
   announceGameRestart(roomId: string): void {
     const message = '다시 시작되었습니다.';
     this.roomGateway.broadcastNotice(roomId, 'game_restart', message);
