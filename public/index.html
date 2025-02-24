@@ -218,6 +218,26 @@
         게임 단계: 밤으로 전환
       </button>
     </div>
+    <!-- 역할별 능력 버튼 컨테이너 -->
+    <div id="roleActionContainer" style="display: none; margin-top: 10px">
+      <button id="mafiaActionBtn" class="btn btn-danger" style="display: none">
+        제거할 대상 선택
+      </button>
+      <button
+        id="policeActionBtn"
+        class="btn btn-primary"
+        style="display: none"
+      >
+        조사할 대상 선택
+      </button>
+      <button
+        id="doctorActionBtn"
+        class="btn btn-success"
+        style="display: none"
+      >
+        보호할 대상 선택
+      </button>
+    </div>
 
     <script>
       // 방 ID 추출 (예: http://localhost:3000/room/1)
@@ -294,6 +314,75 @@
 
           socket.on('error', function (data) {
             alert('게임 에러: ' + data.message);
+          });
+
+          // 추가된 부분: gameEnd 이벤트 핸들러 등록
+          socket.on('gameEnd', function (data) {
+            // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
+            appendChatMessage('게임 종료: ' + data.message);
+            document.getElementById('gameStatus').textContent = data.message;
+            console.log('게임 종료 데이터:', data);
+          });
+
+          socket.on('NIGHT:START', function (data) {
+            console.log('NIGHT:START 이벤트 수신:', data);
+
+            // 메시지를 채팅창에 출력
+            appendChatMessage(`[SYSTEM] ${data.message}`, true);
+
+            // UI 변경 - 배경 어둡게 변경
+            document.body.style.backgroundColor = 'black';
+
+            // 컨테이너 배경 변경 (밤 테마 적용)
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#2c3e50';
+
+            // 모든 버튼 비활성화 (투표 버튼 숨기기)
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
+            document.getElementById('secondVoteContainer').style.display =
+              'none';
+
+            // 역할별 능력 버튼 초기화
+            document.getElementById('roleActionContainer').style.display =
+              'block';
+            document.getElementById('mafiaActionBtn').style.display = 'none';
+            document.getElementById('policeActionBtn').style.display = 'none';
+            document.getElementById('doctorActionBtn').style.display = 'none';
+
+            // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
+            if (currentUserRole === 'mafia') {
+              appendChatMessage(
+                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
+                true,
+              );
+              document.getElementById('mafiaActionBtn').style.display =
+                'inline-block';
+            } else if (currentUserRole === 'police') {
+              appendChatMessage(
+                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
+                true,
+              );
+              document.getElementById('policeActionBtn').style.display =
+                'inline-block';
+            } else if (currentUserRole === 'doctor') {
+              appendChatMessage(
+                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
+                true,
+              );
+              document.getElementById('doctorActionBtn').style.display =
+                'inline-block';
+            } else {
+              appendChatMessage(
+                `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
+                true,
+              );
+            }
           });
 
           // VOTE:SECOND:END 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
