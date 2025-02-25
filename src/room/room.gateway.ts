@@ -183,7 +183,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
     }
 
-    await this.gameService.startNightPhase(data.roomId, currentGId); // 데이터베이스 업데이트
+    await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
     this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
   }
 
@@ -319,6 +319,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           data.roomId,
           `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
+        this.gameService.startNightPhase(data.roomId);
         this.server.to(data.roomId).emit('NIGHT:PHASE', {
           message: '생존투표 동률, 밤 단계 시작',
         });
