@@ -273,6 +273,17 @@
                 document.getElementById("firstVoteContainer").style.display = "block";
             });
 
+            // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+            socket.on("VOTE:FIRST:TARGET:EFFECT", function (data) {
+                console.log("VOTE:FIRST:TARGET:EFFECT 이벤트 수신:", data);
+                var winnerBtn = document.querySelector(`.occupant-btn[data-userid="${data.winnerId}"]`);
+                if (winnerBtn) {
+                    winnerBtn.classList.add("blink");
+                }
+                document.getElementById("firstVoteContainer").style.display = "none";
+                document.getElementById("secondVoteContainer").style.display = "block";
+            });
+
             // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
             socket.on("VOTE:SECOND:DEAD", function (data) {
                 console.log("VOTE:SECOND:DEAD 이벤트 수신:", data);
@@ -283,6 +294,18 @@
                     targetBtn.classList.remove("btn-outline-primary");
                     targetBtn.classList.add("btn-secondary");
                     targetBtn.disabled = true;
+                }
+                document.getElementById("secondVoteContainer").style.display = "none";
+            });
+
+            // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거 
+            socket.on("VOTE:SECOND:TIE", function (data) {
+                console.log("VOTE:SECOND:TIE 이벤트 수신:", data);
+                var targetId = data.targetId;
+                var targetBtn = document.querySelector(`.occupant-btn[data-userid="${targetId}"]`);
+                if (targetBtn) {
+                    targetBtn.classList.remove("blink"); // 깜빡임 제거
+                    targetBtn.classList.remove("btn-outline-primary");
                 }
                 document.getElementById("secondVoteContainer").style.display = "none";
             });
@@ -317,17 +340,6 @@
                     console.log("1차 투표 완료:", { voterId: currentUserId, targetId: selectedTargetId });
                     clearSelection();
                 });
-            });
-
-            // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-            socket.on("VOTE:SURVIVAL", function (data) {
-                console.log("VOTE:SURVIVAL 이벤트 수신:", data);
-                var winnerBtn = document.querySelector(`.occupant-btn[data-userid="${data.winnerId}"]`);
-                if (winnerBtn) {
-                    winnerBtn.classList.add("blink");
-                }
-                document.getElementById("firstVoteContainer").style.display = "none";
-                document.getElementById("secondVoteContainer").style.display = "block";
             });
 
             // 2차 투표: 사살 버튼 클릭 이벤트

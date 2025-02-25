@@ -9,6 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { GameService } from '../game/game.service';
 import { RoomService } from './room.service';
+import { RoomEvents } from './room.events.enum';
 
 @WebSocketGateway({
   namespace: 'room',
@@ -32,7 +33,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
-    this.server.to(data.roomId).emit('message', {
+    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
       sender: data.userId,
       message: data.message,
     });
@@ -99,7 +100,7 @@ export class RoomGateway implements OnGatewayDisconnect {
             ', ',
           )} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
         );
-        this.server.to(data.roomId).emit('NIGHT:PHASE', {
+        this.server.to(data.roomId).emit(RoomEvents.NIGHT_PHASE, {
           message: '동점으로 인해 밤 단계로 넘어갑니다.',
         });
         return;
@@ -107,7 +108,7 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       // 동점이 아닌 경우, 최다 득표자를 targetId로 저장
       await this.gameService.setTargetId(data.roomId, finalResult.winnerId!);
-      this.server.to(data.roomId).emit('VOTE:SURVIVAL', {
+      this.server.to(data.roomId).emit(RoomEvents.VOTE_FIRST_TARGET_EFFECT, {
         winnerId: finalResult.winnerId,
         voteCount: finalResult.voteCount,
       });
@@ -118,7 +119,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
     } catch (error) {
       console.error('handleFirstVote 에러 발생:', error);
-      client.emit('voteError', '투표 처리 중 오류 발생.');
+      client.emit(RoomEvents.VOTE_ERROR, '투표 처리 중 오류 발생.');
     }
   }
 
@@ -143,13 +144,18 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
       console.log('투표 결과 계산 완료:', finalResult);
 
+      const targetId = await this.gameService.getTargetId(data.roomId);
+
       if (finalResult.tie) {
         this.roomService.sendSystemMessage(
           this.server,
           data.roomId,
           `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
-        this.server.to(data.roomId).emit('NIGHT:PHASE', {
+        this.server.to(data.roomId).emit(RoomEvents.VOTE_SECOND_TIE, {
+          targetId,
+        });
+        this.server.to(data.roomId).emit(RoomEvents.NIGHT_PHASE, {
           message: '생존투표 동률, 밤 단계 시작',
         });
         return;
@@ -162,7 +168,6 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
 
       // 사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
-      const targetId = await this.gameService.getTargetId(data.roomId);
       if (targetId !== null) {
         await this.gameService.killPlayers(data.roomId, [targetId]);
         this.roomService.sendSystemMessage(
@@ -175,15 +180,15 @@ export class RoomGateway implements OnGatewayDisconnect {
           data.roomId,
           `밤이 찾아옵니다..`,
         );
-        this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
+        this.server.to(data.roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
           targetId,
         });
       }
-      this.server.to(data.roomId).emit('NIGHT:BACKGROUND', {
+      this.server.to(data.roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
         message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
       });
     } catch (error: any) {
-      client.emit('voteError', { message: error.message });
+      client.emit(RoomEvents.VOTE_ERROR, { message: error.message });
     }
   }
 }
