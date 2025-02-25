@@ -14,7 +14,7 @@ import { BadRequestException } from '@nestjs/common';
 import { NightResultService } from 'src/notice/night-result.service';
 import { Inject, forwardRef } from '@nestjs/common';
 import { TimerService } from 'src/timer/timer.service';
-import { error } from 'console';
+import { RoomEvents } from './room.events.enum';
 
 export interface Player {
   id: number;
@@ -49,7 +49,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
-    this.server.to(data.roomId).emit('message', {
+    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
       sender: data.userId,
       message: data.message,
     });
@@ -251,7 +251,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
     } catch (error) {
       console.error('handleFirstVote 에러 발생:', error);
-      client.emit('voteError', '투표 처리 중 오류 발생.');
+      client.emit(RoomEvents.VOTE_ERROR, '투표 처리 중 오류 발생.');
     }
   }
 
@@ -321,6 +321,8 @@ export class RoomGateway implements OnGatewayDisconnect {
         await this.gameService.calculateFirstVoteResult(roomId);
       console.log('투표 결과 계산 완료:', finalResult);
 
+      const targetId = await this.gameService.getTargetId(roomId);
+
       if (finalResult.tie) {
         this.roomService.sendSystemMessage(
           this.server,
@@ -368,6 +370,7 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   private async finalizeSecondVote(roomId: string) {
     try {
+      const targetId = await this.gameService.getTargetId(roomId);
       const finalResult =
         await this.gameService.calculateSecondVoteResult(roomId);
       console.log('투표 결과 계산 완료:', finalResult);
@@ -379,7 +382,10 @@ export class RoomGateway implements OnGatewayDisconnect {
           `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
         this.gameService.startNightPhase(roomId);
-        this.server.to(roomId).emit('NIGHT:PHASE', {
+        this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_TIE, {
+          targetId,
+        });
+        this.server.to(roomId).emit(RoomEvents.NIGHT_PHASE, {
           message: '생존투표 동률, 밤 단계 시작',
         });
         return;
@@ -400,7 +406,6 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
 
       //  사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
-      const targetId = await this.gameService.getTargetId(roomId);
       if (targetId !== null && finalResult.execute) {
         console.log(`사형 결정 - 플레이어 ${targetId}를 제거합니다.`);
 
@@ -434,6 +439,13 @@ export class RoomGateway implements OnGatewayDisconnect {
       this.gameService.startNightPhase(roomId);
       this.server.to(roomId).emit('NIGHT:PHASE', {
         message: '밤이 찾아옵니다.',
+      });
+      this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
+        targetId,
+      });
+
+      this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
+        message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
       });
 
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
