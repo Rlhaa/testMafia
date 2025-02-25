@@ -254,11 +254,11 @@
         '채팅룸 (룸 ' + roomId + ')';
 
       var currentUserId;
-      var sender;
       var socket; // 단일 소켓
       var roomInfo; // 최신 방 정보
       var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
-
+      var currentUserRole;
+      var currentUserIsAlive;
       // 로그인 및 룸 입장
       document
         .getElementById('loginBtn')
@@ -269,6 +269,8 @@
             return;
           }
           currentUserId = Number(userIdInput);
+          //유저 아이디 확인 후 생존 여부 체크 로직
+          currentUserIsAlive = true;
           console.log('입력된 사용자 ID:', currentUserId);
 
           socket = io('http://localhost:3000/room', {
@@ -316,8 +318,7 @@
             .addEventListener('click', sendChatMessage);
 
           socket.on('YOUR_ROLE', function (data) {
-            //currentUserRole = data.role;
-            sender = data.sender;
+            currentUserRole = data.role;
             appendChatMessage(data.message, true);
           });
 
@@ -567,7 +568,7 @@
                     roomId: roomId,
                     players: [currentUserId], // 사망 처리할 플레이어 ID
                   });
-                  sender.isAlive = data.isAlive;
+                  currentUserIsAlive = data.isAlive;
                   //currentUserIsAlive = false;
                 });
             }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
@@ -590,9 +591,8 @@
       function sendChatMessage() {
         var messageInputElem = document.getElementById('messageInput');
         var message = messageInputElem ? messageInputElem.value : '';
-        //var sender =
         if (message.trim() === '') return;
-        if (sender.isAlive === false) {
+        if (currentUserIsAlive === false) {
           // 죽은 사람은 무조건 'chatDead'
           socket.emit('chatDead', {
             roomId: roomId,
@@ -602,7 +602,7 @@
           if (messageInputElem) {
             messageInputElem.value = '';
           }
-        } else if (sender.role === 'mafia') {
+        } else if (currentUserRole === 'mafia') {
           // 마피아이면서 살아있는 경우
           socket.emit('chatMafia', {
             roomId: roomId,
