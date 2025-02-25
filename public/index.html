@@ -155,6 +155,46 @@
           width: 100%;
         }
       }
+
+      #roleActionContainer {
+        margin-top: 10px;
+        text-align: center;
+      }
+      #roleActionContainer button {
+        margin: 5px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background-color 0.3s ease,
+          transform 0.3s ease;
+      }
+      #roleActionContainer button.btn-danger {
+        background-color: #e74c3c;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-danger:hover {
+        background-color: #c0392b;
+        transform: scale(1.05);
+      }
+      #roleActionContainer button.btn-primary {
+        background-color: #3498db;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-primary:hover {
+        background-color: #2980b9;
+        transform: scale(1.05);
+      }
+      #roleActionContainer button.btn-success {
+        background-color: #2ecc71;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-success:hover {
+        background-color: #27ae60;
+        transform: scale(1.05);
+      }
     </style>
   </head>
 
@@ -217,7 +257,6 @@
         게임 단계: 밤으로 전환
       </button>
     </div>
-    <!-- 역할별 능력 버튼 컨테이너 -->
     <div id="roleActionContainer" style="display: none; margin-top: 10px">
       <button id="mafiaActionBtn" class="btn btn-danger" style="display: none">
         제거할 대상 선택
@@ -308,11 +347,20 @@
             .addEventListener('click', sendChatMessage);
 
           socket.on('YOUR_ROLE', function (data) {
+            currentUserRole = data.role;
+            console.log('내 역할 설정:', currentUserRole);
             appendChatMessage(data.message, true);
           });
 
           socket.on('error', function (data) {
             alert('게임 에러: ' + data.message);
+          });
+
+          socket.on('POLICE:RESULT', function (data) {
+            appendChatMessage(
+              '[경찰 조사 결과] 대상의 역할: ' + data.role,
+              true,
+            );
           });
 
           socket.on('NIGHT:START:SIGNAL', function () {
@@ -330,17 +378,11 @@
             console.log('게임 종료 데이터:', data);
           });
 
-          // 🌓 밤 시작 신호를 감지하여 UI를 변경
+          // 밤 시작 신호 수신 시 역할 버튼 표시
           socket.on('NIGHT:START:SIGNAL', function (data) {
             console.log('🌙 NIGHT:START:SIGNAL 이벤트 수신:', data);
-
-            // 메시지를 채팅창에 출력
-            appendChatMessage(`[SYSTEM] 밤 단계로 전환됩니다...`, true);
-
-            // 배경 색 변경 (밤 테마)
+            appendChatMessage('[SYSTEM] 밤 단계로 전환됩니다...', true);
             document.body.style.backgroundColor = 'black';
-
-            // 컨테이너 배경 변경 (밤 테마 적용)
             var chatContainer = document.querySelector('.chat-container');
             var occupantContainer = document.querySelector(
               '.occupant-container',
@@ -348,64 +390,19 @@
             if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
             if (occupantContainer)
               occupantContainer.style.backgroundColor = '#2c3e50';
-
-            // 투표 관련 버튼 숨기기
             document.getElementById('firstVoteContainer').style.display =
               'none';
             document.getElementById('secondVoteContainer').style.display =
               'none';
-
-            // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
-            if (currentUserRole === 'mafia') {
-              appendChatMessage(
-                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
-                true,
-              );
-            } else if (currentUserRole === 'police') {
-              appendChatMessage(
-                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
-                true,
-              );
-            } else if (currentUserRole === 'doctor') {
-              appendChatMessage(
-                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
-                true,
-              );
-            } else {
-              appendChatMessage(
-                `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
-                true,
-              );
-            }
+            showRoleActionContainer();
+            socket.emit('NIGHT:START', { roomId: roomId });
           });
 
-          // 🔹 서버에서 방 전체에게 NIGHT_START 이벤트를 보내면 UI 업데이트
           socket.on('ROOM:NIGHT_START', function (data) {
             console.log('🌌 ROOM:NIGHT_START 이벤트 수신:', data);
-
-            // 메시지를 채팅창에 추가
-            appendChatMessage(`[SYSTEM] ${data.message}`, true);
-
-            // UI 테마 업데이트 (검은색 배경)
+            appendChatMessage('[SYSTEM] ' + data.message, true);
             document.body.style.backgroundColor = 'black';
-
-            // 특정 역할이 있으면 안내 메시지 제공
-            if (currentUserRole === 'mafia') {
-              appendChatMessage(
-                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
-                true,
-              );
-            } else if (currentUserRole === 'police') {
-              appendChatMessage(
-                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
-                true,
-              );
-            } else if (currentUserRole === 'doctor') {
-              appendChatMessage(
-                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
-                true,
-              );
-            }
+            // 단순 안내 메시지, 역할 버튼은 NIGHT:START:SIGNAL에서 처리
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트
@@ -613,6 +610,155 @@
           b.classList.remove('selected');
         });
         selectedTargetId = null;
+      }
+
+      // 밤 로직 처리 함수 마피아
+      function handleMafiaAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:MAFIA_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[마피아] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 경찰 함수
+      function handlePoliceAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:POLICE_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[경찰] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 의사 함수
+      function handleDoctorAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:DOCTOR_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[의사] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 밤 로직 역할별 버튼 핸들러 부착 (한 번만)
+      function attachRoleActionHandlers() {
+        document
+          .getElementById('mafiaActionBtn')
+          .addEventListener('click', handleMafiaAction);
+        document
+          .getElementById('policeActionBtn')
+          .addEventListener('click', handlePoliceAction);
+        document
+          .getElementById('doctorActionBtn')
+          .addEventListener('click', handleDoctorAction);
+      }
+      attachRoleActionHandlers();
+
+      // 밤 로직 역할 버튼 컨테이너 관련 함수
+      function showRoleActionContainer() {
+        var container = document.getElementById('roleActionContainer');
+        container.style.display = 'block';
+        document.getElementById('mafiaActionBtn').style.display = 'none';
+        document.getElementById('policeActionBtn').style.display = 'none';
+        document.getElementById('doctorActionBtn').style.display = 'none';
+        console.log(
+          'showRoleActionContainer, currentUserRole:',
+          currentUserRole,
+        );
+        if (currentUserRole === 'mafia') {
+          document.getElementById('mafiaActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.',
+            true,
+          );
+        } else if (currentUserRole === 'police') {
+          document.getElementById('policeActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.',
+            true,
+          );
+        } else if (currentUserRole === 'doctor') {
+          document.getElementById('doctorActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.',
+            true,
+          );
+        } else {
+          appendChatMessage(
+            '[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.',
+            true,
+          );
+        }
+      }
+      //밤 로직 관련 함수
+      function hideRoleActionContainer() {
+        document.getElementById('roleActionContainer').style.display = 'none';
+      }
+      // 밤 액션 체크 함수
+      function checkNightActionsCompleted() {
+        socket.emit(
+          'CHECK:NIGHT_ACTIONS',
+          { roomId: roomId },
+          function (response) {
+            console.log('CHECK:NIGHT_ACTIONS 응답:', response);
+            if (response.allActionsCompleted) {
+              console.log(
+                '🔥 모든 밤 액션 완료됨. `PROCESS:NIGHT_RESULT` 요청!',
+              );
+              socket.emit('PROCESS:NIGHT_RESULT', { roomId: roomId });
+            }
+          },
+        );
       }
     </script>
   </body>
