@@ -21,6 +21,10 @@ export interface Player {
 }
 
 @WebSocketGateway({
+  cors: {
+    origin: 'http://localhost:3000', // 클라이언트 주소 허용
+    credentials: true, // 쿠키, 인증 포함 가능
+  },
   namespace: 'room',
 })
 export class RoomGateway implements OnGatewayDisconnect {
