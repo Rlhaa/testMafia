@@ -286,7 +286,7 @@
           });
 
           socket.on('message', function (data) {
-                appendChatMessage('[' + data.sender + '] ' + data.message);
+                appendChatMessage('[' + data.sender  + '] ' + data.message);
             });
 
           socket.on('CHAT:DEAD', function (data) {
@@ -294,11 +294,11 @@
             });
 
           socket.on('CHAT:MAFIA', function (data) {
-                appendChatMessage('[' + data.sender + '] ' + data.message, 'CHAT:MAFIA');
+                appendChatMessage('[' + data.sender  + '] ' + data.message, 'CHAT:MAFIA');
             });
 
           socket.on('system_message', function (data) {
-            appendChatMessage(`[공지] ${data.message}`, true);
+            appendChatMessage(`[공지] ${data.message}`, 'system_message');
           });
 
           document
@@ -494,24 +494,12 @@
                 });
             }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
         });
-      // 채팅 메시지 추가 함수(기존)
-      // function appendChatMessage(message, isRole) {
-      //   var chatMessagesDiv = document.getElementById('chatMessages');
-      //   var messageElement = document.createElement('div');
-      //   if (isRole) {
-      //     messageElement.classList.add('role-message');
-      //   }
-      //   messageElement.textContent = message;
-      //   chatMessagesDiv.appendChild(messageElement);
-
-      //   // 스크롤 위치 업데이트
-      //   chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
-      // }
+      
       function appendChatMessage(message, isRole) {
           var chatMessagesDiv = document.getElementById('chatMessages');
           var messageElement = document.createElement('div');
 
-          if (isRole === 'role') {
+          if (isRole === 'system_message') {
             messageElement.classList.add('role-message');
           } else if (isRole === 'CHAT:DEAD') {
             messageElement.classList.add('red-message');

@@ -77,6 +77,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     if (!sender) {
       throw new BadRequestException('발신자를 찾을 수 없습니다.');
     }
+    
     return sender;
   }
 
