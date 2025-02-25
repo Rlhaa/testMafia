@@ -476,26 +476,6 @@ export class GameService {
   // (필요시) 게임 종료 관련 메서드
   // ──────────────────────────────
 
-  //n. 밤 시작
-  //2차례의 투표 종료 후 15초간 밤이 됩니다.
-  //마피아는 의논 후에 사살 대상을 선택할 수 있고
-  //의사는 살릴 사람을 선택할 수 있고
-  //경찰은 조사 대상을 선택할 수 있습니다.
-  //getMafias
-  //마피아를 배정받은 사람들을 구합니다.
-  //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
-  async startNightPhase(roomId: string, gameId: string): Promise<number> {
-    // 들어온 인자로 레디스 키 구성
-    const redisKey = `room:${roomId}:game:${gameId}`;
-    // 현재 게임 데이터를 get
-    const gameData = await this.getGameData(roomId, gameId);
-
-    // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
-    let currentDay = parseInt(gameData.day, 10) || 0;
-    await this.redisClient.hset(redisKey, 'phase', 'night');
-    return currentDay;
-  }
-
   //수신자: 마피아
   async getMafias(roomId: string, gameId: string) {
     const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
