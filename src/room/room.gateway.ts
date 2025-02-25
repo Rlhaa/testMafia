@@ -34,7 +34,6 @@ export class RoomGateway implements OnGatewayDisconnect {
     private readonly gameService: GameService,
     @Inject(forwardRef(() => RoomService))
     private readonly roomService: RoomService,
-    private readonly timerService: TimerService,
     @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService,
   ) {}
@@ -55,32 +54,34 @@ export class RoomGateway implements OnGatewayDisconnect {
     });
   }
 
-  //발신인 검증, 함수화 가능
-  //나중에 생각하자
-  // async getSpeakerInfo(@MessageBody() data: { roomId: string; userId: number; message: string },
-  // @ConnectedSocket() client: Socket,) {
-  //   // 방의 플레이어 정보를 가져옵니다.
-  //   const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-  //   if (!currentGId) {
-  //     throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-  //   }
-  //   const gameData = await this.gameService.getGameData(
-  //     data.roomId,
-  //     currentGId,
-  //   );
-  //   const players: Player[] = gameData.players
-  //     ? JSON.parse(gameData.players)
-  //     : [];
+  //방 아이디로 게임 아이디 받아오기
+  async getCurrentGameId(roomId: string) {
+    const currentGameId = await this.gameService.getCurrentGameId(roomId);
+    if (!currentGameId) {
+      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+    }
+    return currentGameId;
+  }
 
-  //   // 메시지를 보낸 사용자의 정보를 찾습니다.
-  //   const sender = players.find((player) => player.id === data.userId);
+  //게임 아이디와 방 아이디로 게임 데이터 받아오기
+  async getGameData(roomId: string, gameId: string) {
+    return await this.gameService.getGameData(roomId, gameId);
+  }
 
-  //   if (!sender) {
-  //     client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-  //     return;
-  //   }
-  // }
-  //
+  //발신인 정보 받아오기
+  async getSpeakerInfo(roomId: string, userId: number) {
+    // 방의 플레이어 정보를 가져옵니다.
+    const gameId = await this.getCurrentGameId(roomId);
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 메시지를 보낸 사용자의 정보를 찾습니다.
+    const sender = players.find((player) => player.id === userId);
+    if (!sender) {
+      throw new BadRequestException('발신자를 찾을 수 없습니다.');
+    }
+    return sender;
+  }
 
   @SubscribeMessage('chatDead')
   async handleChatDead(
@@ -89,16 +90,10 @@ export class RoomGateway implements OnGatewayDisconnect {
   ): Promise<void> {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!currentGId) {
-        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-      }
+      const currentGId = await this.getCurrentGameId(data.roomId);
 
-      const gameData = await this.gameService.getGameData(
-        data.roomId,
-        currentGId,
-      );
-      const players: Player[] = gameData.players;
+      // 메시지를 보낸 사용자의 정보를 찾습니다.
+      const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 죽은 플레이어들만 필터링합니다.
       const deadPlayers = await this.gameService.getDead(
@@ -112,11 +107,20 @@ export class RoomGateway implements OnGatewayDisconnect {
           deadPlayer.id,
         );
         if (deadPlayerSocketId) {
-          this.server.to(deadPlayerSocketId).emit('CHAT:DEAD', {
-            sender: data.userId,
+          this.server.to(deadPlayerSocketId).emit('message', {
+            sender: sender.id,
             message: data.message,
           });
           messageSentToDeadPlayers = true;
+        }
+        // 죽은 사람들에게 메시지를 보냈다면 방의 모든 클라이언트에게는 보내지 않음
+        //이 경우 6명이 죽은 상황이면 이 짓을 6번 반복하기 때문에 비효율적
+        //같은 게임 내에서 죽은 자들만 소통 가능한 채팅방과 마피아끼리만 대화 가능한 방을 별도로 파서 운영하는 건?
+        if (!messageSentToDeadPlayers) {
+          this.server.to(data.roomId).emit('message', {
+            sender: sender.id,
+            message: data.message,
+          });
         }
       });
     } catch (error) {
@@ -134,23 +138,11 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!currentGId) {
-        throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-      }
-
-      const gameData = await this.gameService.getGameData(
-        data.roomId,
-        currentGId,
-      );
-      const players: Player[] = gameData.players;
+      const currentGId = await this.getCurrentGameId(data.roomId);
+      const gameData = await this.getGameData(data.roomId, currentGId);
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
-      const sender = players.find((player) => player.id === data.userId);
-      if (!sender) {
-        client.emit('error', { message: '사용자를 찾을 수 없습니다.' });
-        return;
-      }
+      const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 마피아인 플레이어만 필터링합니다.
       const mafias = await this.gameService.getMafias(data.roomId, currentGId);
@@ -161,8 +153,8 @@ export class RoomGateway implements OnGatewayDisconnect {
       mafias.forEach((mafia) => {
         const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
-          this.server.to(mafiaPlayerSocketId).emit('CHAT:MAFIA', {
-            sender: data.userId,
+          this.server.to(mafiaPlayerSocketId).emit('message', {
+            sender: sender.id,
             message: data.message,
           });
           messageSentToMafias = true; // 마피아에게 메시지를 보냈음을 기록
@@ -171,7 +163,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       // 마피아에게 메시지를 보냈다면 방의 모든 클라이언트에게는 보내지 않음
       if (!messageSentToMafias) {
         this.server.to(data.roomId).emit('message', {
-          sender: data.userId,
+          sender: sender.id,
           message: data.message,
         });
       }
@@ -193,8 +185,27 @@ export class RoomGateway implements OnGatewayDisconnect {
       throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
     }
 
-    await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
+    await this.gameService.startNightPhase(data.roomId, currentGId); // 데이터베이스 업데이트
     this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
+  }
+
+  //사망 처리 이벤트
+  @SubscribeMessage('KILL_PLAYERS')
+  async handleKillPlayers(
+    @MessageBody() data: { roomId: string; players: number[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      await this.gameService.killPlayers(data.roomId, data.players);
+      //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
+      this.server.to(data.roomId).emit('PLAYERS_KILLED', {
+        message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
+        isAlive: false,
+      });
+    } catch (error) {
+      console.error('handleKillPlayers 에러 발생:', error);
+      client.emit('error', { message: '사망 처리 중 오류 발생.' });
+    }
   }
 
   // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
@@ -245,10 +256,38 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
       console.log('handleFirstVote 결과:', result);
       if (!result.success) return;
-      if (result.allVotesCompleted) {
-        this.timerService.cancelTimer(data.roomId, 'day');
-        await this.finalizeFirstVote(data.roomId);
+      if (!result.allVotesCompleted) return;
+
+      const finalResult = await this.gameService.calculateFirstVoteResult(
+        data.roomId,
+      );
+      console.log('투표 결과 계산 완료:', finalResult);
+
+      if (finalResult.tie) {
+        this.roomService.sendSystemMessage(
+          this.server,
+          data.roomId,
+          `투표 결과: 동률 발생 (${finalResult.tieCandidates.join(
+            ', ',
+          )} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
+        );
+        this.server.to(data.roomId).emit('NIGHT:PHASE', {
+          message: '동점으로 인해 밤 단계로 넘어갑니다.',
+        });
+        return;
       }
+
+      // 동점이 아닌 경우, 최다 득표자를 targetId로 저장
+      await this.gameService.setTargetId(data.roomId, finalResult.winnerId!);
+      this.server.to(data.roomId).emit('VOTE:SURVIVAL', {
+        winnerId: finalResult.winnerId,
+        voteCount: finalResult.voteCount,
+      });
+      this.roomService.sendSystemMessage(
+        this.server,
+        data.roomId,
+        `투표 결과: 최다 득표자 ${finalResult.winnerId} (${finalResult.voteCount}표) → 생존 투표 진행.`,
+      );
     } catch (error) {
       console.error('handleFirstVote 에러 발생:', error);
       client.emit(RoomEvents.VOTE_ERROR, '투표 처리 중 오류 발생.');
@@ -269,56 +308,11 @@ export class RoomGateway implements OnGatewayDisconnect {
         data.execute,
       );
       console.log('handleSecondVote 결과:', result);
-      if (result.allVotesCompleted) {
-        this.timerService.cancelTimer(data.roomId, 'secondVoteTimer');
-        await this.finalizeSecondVote(data.roomId);
-      }
-    } catch (error) {
-      console.error('handleSecondVote 에러 발생:', error);
-      client.emit('voteError', '투표 처리 중 오류 발생.');
-    }
-  }
+      if (!result.allVotesCompleted) return;
 
-  /**
-   * 클라이언트에게 메시지를 브로드캐스트하는 유틸리티 함수
-   * (서비스에서 호출하여 공지를 전파할 때 사용)
-   */
-  broadcastNotice(
-    roomId: string,
-    event: string,
-    message: string,
-    additionalData?: Record<string, any>,
-  ) {
-    const payload = { roomId, message, ...additionalData };
-    this.server.to(roomId).emit(event, payload);
-  }
-  //CHAN 임시 로직 수정
-  async announceFirstVoteStart(
-    roomId: string,
-    dayNumber: number,
-  ): Promise<void> {
-    this.nightResultService.announceFirstVoteStart(roomId, dayNumber);
-
-    // 15초 후 자동으로 투표 마감
-    this.timerService
-      .startTimer(roomId, 'firstVoteTimer', 15000)
-      .subscribe(async () => {
-        console.log('1차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
-        await this.finalizeFirstVote(roomId);
-      });
-  }
-
-  private async finalizeFirstVote(roomId: string) {
-    try {
-      //CHAN 데이 얻을 방법 이것밖에 없나?
-      const gameId = await this.gameService.getCurrentGameId(roomId);
-      const gameData = await this.gameService.getGameData(
-        roomId,
-        String(gameId),
+      const finalResult = await this.gameService.calculateSecondVoteResult(
+        data.roomId,
       );
-      let currentDay = parseInt(gameData.day, 10) || 0;
-      const finalResult =
-        await this.gameService.calculateFirstVoteResult(roomId);
       console.log('투표 결과 계산 완료:', finalResult);
 
       const targetId = await this.gameService.getTargetId(roomId);
@@ -393,12 +387,12 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       this.roomService.sendSystemMessage(
         this.server,
-        roomId,
+        data.roomId,
         `투표 결과: ${finalResult.execute ? '사형' : '생존'} - (${finalResult.voteCount}표), 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
       );
 
       //  gameId 조회 추가 (오류 수정)
-      const gameId = await this.gameService.getCurrentGameId(roomId);
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
       if (!gameId) {
         throw new BadRequestException(
           '현재 진행 중인 게임이 존재하지 않습니다.',
@@ -410,28 +404,28 @@ export class RoomGateway implements OnGatewayDisconnect {
         console.log(`사형 결정 - 플레이어 ${targetId}를 제거합니다.`);
 
         //  플레이어 사망 처리
-        await this.gameService.killPlayers(roomId, [targetId]);
+        await this.gameService.killPlayers(data.roomId, [targetId]);
 
         //  사망자 확인을 위해 gameId 추가하여 getDead 호출 (오류 수정)
-        const deadPlayers = await this.gameService.getDead(roomId, gameId);
+        const deadPlayers = await this.gameService.getDead(data.roomId, gameId);
         console.log(`현재 사망자 목록:`, deadPlayers);
 
         this.roomService.sendSystemMessage(
           this.server,
-          roomId,
+          data.roomId,
           `플레이어 ${targetId}가 사망 처리되었습니다.`,
         );
-        // 이부분 받는게 있나??
-        this.server.to(roomId).emit('VOTE:SECOND:DEAD', {
+
+        this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
           targetId,
         });
       }
 
       //  게임 종료 체크
-      const endCheck = await this.gameService.checkEndGame(roomId);
+      const endCheck = await this.gameService.checkEndGame(data.roomId);
       if (endCheck.isGameOver) {
-        const gameEndResult = await this.gameService.endGame(roomId);
-        this.server.to(roomId).emit('gameEnd', gameEndResult);
+        const gameEndResult = await this.gameService.endGame(data.roomId);
+        this.server.to(data.roomId).emit('gameEnd', gameEndResult);
         return;
       }
 
@@ -449,9 +443,24 @@ export class RoomGateway implements OnGatewayDisconnect {
       });
 
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
-    } catch (error) {
-      console.error('finalizeFirstVote 오류 발생:', error);
+    } catch (error: any) {
+      console.error('VOTE:SECOND 처리 중 오류:', error);
+      client.emit('voteError', { message: error.message });
     }
+  }
+
+  /**
+   * 클라이언트에게 메시지를 브로드캐스트하는 유틸리티 함수
+   * (서비스에서 호출하여 공지를 전파할 때 사용)
+   */
+  broadcastNotice(
+    roomId: string,
+    event: string,
+    message: string,
+    additionalData?: Record<string, any>,
+  ) {
+    const payload = { roomId, message, ...additionalData };
+    this.server.to(roomId).emit(event, payload);
   }
 
   @SubscribeMessage('endGame')
