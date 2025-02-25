@@ -1,659 +1,648 @@
 <!doctype html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>룸 채팅 및 게임 테스트</title>
-    <!-- 부트스트랩 CSS -->
-    <link
-      rel="stylesheet"
-      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-    />
-    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
-    <style>
-      body {
-        font-family: 'Arial', sans-serif;
-        background-color: #f0f4f8;
-        margin: 20px;
-        color: #333;
-        line-height: 1.6;
-        transition: background-color 4s ease;
+
+<head>
+  <meta charset="UTF-8" />
+  <title>룸 채팅 및 게임 테스트</title>
+  <!-- 부트스트랩 CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+  <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f0f4f8;
+      margin: 20px;
+      color: #333;
+      line-height: 1.6;
+      transition: background-color 4s ease;
+    }
+
+    h1,
+    h2 {
+      color: #2c3e50;
+    }
+
+    .container-custom {
+      display: flex;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .chat-container,
+    .occupant-container,
+    .login-container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      transition: background-color 4s ease;
+    }
+
+    .chat-container {
+      flex: 7;
+    }
+
+    .occupant-container {
+      flex: 3;
+    }
+
+    #chatMessages {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 5px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      margin-bottom: 10px;
+      scroll-behavior: smooth;
+    }
+
+    #occupantList {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .occupant-btn {
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background-color: #ecf0f1;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    /* 기본 hover 효과를 정의한 규칙 */
+    .occupant-btn:hover {
+      background-color: #d5dbdb;
+    }
+
+    /* disabled 상태나 no-hover 클래스가 적용된 경우, hover 효과를 없앱니다 */
+    .occupant-btn.no-hover:hover,
+    .occupant-btn:disabled:hover {
+      background-color: inherit !important;
+    }
+
+    /* .occupant-btn.selected {
+      background-color: #3498db;
+      color: white;
+    } */
+
+    input[type='text'],
+    input[type='number'] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    button:disabled {
+      background-color: #bdc3c7;
+      cursor: not-allowed;
+    }
+
+    .system-message {
+      color: #27ae60;
+      font-weight: bold;
+    }
+
+    .role-message {
+      color: #2980b9;
+      font-weight: bold;
+    }
+
+    #voteBtn,
+    #executeBtn,
+    #survivalBtn {
+      margin-top: 10px;
+      margin-right: 10px;
+    }
+
+    @keyframes blink {
+      0% {
+        opacity: 1;
       }
 
-      h1,
-      h2 {
-        color: #2c3e50;
+      50% {
+        opacity: 0.5;
       }
 
+      100% {
+        opacity: 1;
+      }
+    }
+
+    .blink {
+      animation: blink 1s infinite;
+    }
+
+    @media (max-width: 768px) {
       .container-custom {
-        display: flex;
-        gap: 20px;
-        margin-top: 20px;
+        flex-direction: column;
       }
 
       .chat-container,
-      .occupant-container,
-      .login-container {
-        background-color: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        transition: background-color 4s ease;
-      }
-
-      .chat-container {
-        flex: 7;
-      }
-
       .occupant-container {
-        flex: 3;
-      }
-
-      #chatMessages {
-        height: 300px;
-        overflow-y: auto;
-        border: 1px solid #e0e0e0;
-        border-radius: 5px;
-        padding: 10px;
-        background-color: #f9f9f9;
-        margin-bottom: 10px;
-        scroll-behavior: smooth;
-      }
-
-      #occupantList {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-      }
-
-      .occupant-btn {
-        padding: 10px;
-        border: none;
-        border-radius: 5px;
-        background-color: #ecf0f1;
-        cursor: pointer;
-        transition: all 0.3s ease;
-      }
-
-      .occupant-btn:hover {
-        background-color: #d5dbdb;
-      }
-
-      .occupant-btn.selected {
-        background-color: #3498db;
-        color: white;
-      }
-
-      input[type='text'],
-      input[type='number'] {
         width: 100%;
-        padding: 10px;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
       }
+    }
+  </style>
+</head>
 
-      button {
-        background-color: #3498db;
-        color: white;
-        border: none;
-        padding: 10px 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
-
-      button:hover {
-        background-color: #2980b9;
-      }
-
-      button:disabled {
-        background-color: #bdc3c7;
-        cursor: not-allowed;
-      }
-
-      .system-message {
-        color: #27ae60;
-        font-weight: bold;
-      }
-
-      .role-message {
-        color: #2980b9;
-        font-weight: bold;
-      }
-
-      #voteBtn,
-      #executeBtn,
-      #survivalBtn {
-        margin-top: 10px;
-        margin-right: 10px;
-      }
-
-      @keyframes blink {
-        0% {
-          opacity: 1;
-        }
-
-        50% {
-          opacity: 0.5;
-        }
-
-        100% {
-          opacity: 1;
-        }
-      }
-
-      .blink {
-        animation: blink 1s infinite;
-      }
-
-      @media (max-width: 768px) {
-        .container-custom {
-          flex-direction: column;
-        }
-
-        .chat-container,
-        .occupant-container {
-          width: 100%;
-        }
-      }
-    </style>
-  </head>
-
-  <body>
-    <!-- 사용자 ID 입력 -->
-    <div
-      class="login-container"
-      style="
+<body>
+  <!-- 사용자 ID 입력 -->
+  <div class="login-container" style="
         background-color: white;
         padding: 20px;
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      "
-    >
-      <h1>룸 채팅 및 게임 테스트</h1>
-      <div class="form-group">
-        <label for="userId">사용자 ID:</label>
-        <input type="number" id="userId" class="form-control" placeholder="1" />
-      </div>
-      <button id="loginBtn" class="btn btn-primary mt-2">
-        로그인 (룸 입장)
-      </button>
+      ">
+    <h1>룸 채팅 및 게임 테스트</h1>
+    <div class="form-group">
+      <label for="userId">사용자 ID:</label>
+      <input type="number" id="userId" class="form-control" placeholder="1" />
     </div>
-    <!-- 전체 컨테이너: 채팅과 접속 인원 영역 -->
-    <div class="container-custom" id="mainContainer" style="display: none">
-      <!-- 채팅 영역 -->
-      <div class="chat-container" id="chatRoom">
-        <h2 id="roomTitle"></h2>
-        <div id="chatMessages"></div>
-        <input
-          type="text"
-          id="messageInput"
-          class="form-control"
-          placeholder="메시지를 입력하세요"
-        />
-        <button id="sendBtn" class="btn btn-secondary mt-2">전송</button>
-      </div>
-      <!-- 접속 인원 영역 -->
-      <div class="occupant-container" id="roomOccupants">
-        <h2>현재 접속 인원</h2>
-        <div id="occupantList"></div>
-      </div>
+    <button id="loginBtn" class="btn btn-primary mt-2">
+      로그인 (룸 입장)
+    </button>
+  </div>
+  <!-- 전체 컨테이너: 채팅과 접속 인원 영역 -->
+  <div class="container-custom" id="mainContainer" style="display: none">
+    <!-- 채팅 영역 -->
+    <div class="chat-container" id="chatRoom">
+      <h2 id="roomTitle"></h2>
+      <div id="chatMessages"></div>
+      <input type="text" id="messageInput" class="form-control" placeholder="메시지를 입력하세요" />
+      <button id="sendBtn" class="btn btn-secondary mt-2">전송</button>
     </div>
-    <!-- 투표 확정 버튼 컨테이너 (기본적으로 숨김) -->
-    <div id="firstVoteContainer" style="display: none; margin-top: 10px">
-      <button id="voteBtn" class="btn btn-success">투표 확정</button>
-      <p id="voteStatus"></p>
+    <!-- 접속 인원 영역 -->
+    <div class="occupant-container" id="roomOccupants">
+      <h2>현재 접속 인원</h2>
+      <div id="occupantList"></div>
     </div>
-    <!-- 2차 투표 버튼 컨테이너 -->
-    <div id="secondVoteContainer" style="display: none">
-      <button id="executeBtn" class="btn btn-danger">사살</button>
-      <button id="survivalBtn" class="btn btn-info">생존</button>
-    </div>
-    <!-- 게임 상태 영역 -->
-    <div id="gameSection" style="display: none; margin-top: 20px">
-      <h2>게임 상태</h2>
-      <div id="gameStatus"></div>
-      <!-- 테스트용 버튼 추가 삭제예정 -->
-      <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
-        게임 단계: 밤으로 전환
-      </button>
-    </div>
-    <!-- 역할별 능력 버튼 컨테이너 -->
-    <div id="roleActionContainer" style="display: none; margin-top: 10px">
-      <button id="mafiaActionBtn" class="btn btn-danger" style="display: none">
-        제거할 대상 선택
-      </button>
-      <button
-        id="policeActionBtn"
-        class="btn btn-primary"
-        style="display: none"
-      >
-        조사할 대상 선택
-      </button>
-      <button
-        id="doctorActionBtn"
-        class="btn btn-success"
-        style="display: none"
-      >
-        보호할 대상 선택
-      </button>
-    </div>
+  </div>
+  <!-- 투표 확정 버튼 컨테이너 (기본적으로 숨김) -->
+  <div id="firstVoteContainer" style="display: none; margin-top: 10px">
+    <button id="voteBtn" class="btn btn-success">투표 확정</button>
+    <p id="voteStatus"></p>
+  </div>
+  <!-- 2차 투표 버튼 컨테이너 -->
+  <div id="secondVoteContainer" style="display: none">
+    <button id="executeBtn" class="btn btn-danger">사살</button>
+    <button id="survivalBtn" class="btn btn-info">생존</button>
+  </div>
+  <!-- 게임 상태 영역 -->
+  <div id="gameSection" style="display: none; margin-top: 20px">
+    <h2>게임 상태</h2>
+    <div id="gameStatus"></div>
+    <!-- 테스트용 버튼 추가 삭제예정 -->
+    <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
+      게임 단계: 밤으로 전환
+    </button>
+  </div>
+  <!-- 역할별 능력 버튼 컨테이너 -->
+  <div id="roleActionContainer" style="display: none; margin-top: 10px">
+    <button id="mafiaActionBtn" class="btn btn-danger" style="display: none">
+      제거할 대상 선택
+    </button>
+    <button id="policeActionBtn" class="btn btn-primary" style="display: none">
+      조사할 대상 선택
+    </button>
+    <button id="doctorActionBtn" class="btn btn-success" style="display: none">
+      보호할 대상 선택
+    </button>
+  </div>
 
-    <script>
-      // 방 ID 추출 (예: http://localhost:3000/room/1)
-      var pathSegments = window.location.pathname.split('/');
-      var roomId = pathSegments[pathSegments.length - 1];
-      document.getElementById('roomTitle').textContent =
-        '채팅룸 (룸 ' + roomId + ')';
+  <script>
+    // 방 ID 추출 (예: http://localhost:3000/room/1)
+    var pathSegments = window.location.pathname.split('/');
+    var roomId = pathSegments[pathSegments.length - 1];
+    document.getElementById('roomTitle').textContent =
+      '채팅룸 (룸 ' + roomId + ')';
 
-      var isVotingPhase = false;
-      var currentUserId;
-      var socket; // 단일 소켓
-      var roomInfo; // 최신 방 정보
-      var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
-      var currentUserRole;
-      var currentUserIsAlive;
-      // 로그인 및 룸 입장
-      document
-        .getElementById('loginBtn')
-        .addEventListener('click', function () {
-          var userIdInput = document.getElementById('userId').value;
-          if (!userIdInput) {
-            alert('사용자 ID를 입력하세요.');
-            return;
-          }
-          currentUserId = Number(userIdInput);
-          console.log('입력된 사용자 ID:', currentUserId);
+    var isVotingPhase = false;
+    var currentUserId;
+    var socket; // 단일 소켓
+    var roomInfo; // 최신 방 정보
+    var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
+    var currentUserRole;
+    var currentUserIsAlive;
+    // 로그인 및 룸 입장
+    document
+      .getElementById('loginBtn')
+      .addEventListener('click', function () {
+        var userIdInput = document.getElementById('userId').value;
+        if (!userIdInput) {
+          alert('사용자 ID를 입력하세요.');
+          return;
+        }
+        currentUserId = Number(userIdInput);
+        console.log('입력된 사용자 ID:', currentUserId);
 
-          socket = io('http://localhost:3000/room', {
-            auth: { roomId: roomId, userId: currentUserId },
-          });
-
-          // UI 표시
-          document.getElementById('mainContainer').style.display = 'flex';
-          document.getElementById('gameSection').style.display = 'block';
-          //document.getElementById('firstVoteContainer').style.display = 'block';
-
-          socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
-          socket.emit('requestRoomInfo', { roomId: roomId });
-
-          socket.once('ROOM:JOINED', function (data) {
-            roomInfo = data;
-            console.log('ROOM:JOINED 수신:', roomInfo);
-            updateOccupantList(roomInfo);
-          });
-
-          socket.on('ROOM:UPDATED', function (data) {
-            roomInfo = data;
-            console.log('ROOM:UPDATED 수신:', roomInfo);
-            updateOccupantList(roomInfo);
-          });
-
-          socket.on('message', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
-
-          socket.on('CHAT:DEAD', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
-
-          socket.on('CHAT:MAFIA', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
-          });
-
-          socket.on('system_message', function (data) {
-            appendChatMessage(`[공지] ${data.message}`, true);
-          });
-
-          document
-            .getElementById('sendBtn')
-            .addEventListener('click', sendChatMessage);
-
-          socket.on('YOUR_ROLE', function (data) {
-            appendChatMessage(data.message, true);
-          });
-
-          socket.on('error', function (data) {
-            alert('게임 에러: ' + data.message);
-          });
-
-          socket.on('NIGHT:BACKGROUND', function (data) {
-            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
-            // 전체 배경은 검정색으로
-            document.body.style.backgroundColor = 'black';
-            // div 배경은 순수 흰색 대신 연한 회색으로 변경
-            var chatContainer = document.querySelector('.chat-container');
-            var occupantContainer = document.querySelector(
-              '.occupant-container',
-            );
-            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
-            if (occupantContainer)
-              occupantContainer.style.backgroundColor = '#e0e0e0';
-          });
-
-          // 서버로부터 1차 투표 버튼 보이라는 이벤트 수신 시 처리
-          socket.on('VOTE:FIRST:ENABLE', function (data) {
-            isVotingPhase = true;
-            document.getElementById('firstVoteContainer').style.display =
-              'block';
-          });
-
-          // 추가된 부분: gameEnd 이벤트 핸들러 등록
-          socket.on('gameEnd', function (data) {
-            // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
-            appendChatMessage('게임 종료: ' + data.message);
-            document.getElementById('gameStatus').textContent = data.message;
-            console.log('게임 종료 데이터:', data);
-          });
-
-          socket.on('NIGHT:PHASE', function (data) {
-            console.log('NIGHT:PHASE 이벤트 수신:', data);
-
-            // 메시지를 채팅창에 출력
-            appendChatMessage(`[SYSTEM] ${data.message}`, true);
-
-            // // UI 변경 - 배경 어둡게 변경
-            // document.body.style.backgroundColor = 'black';
-
-            // // 컨테이너 배경 변경 (밤 테마 적용)
-            // var chatContainer = document.querySelector('.chat-container');
-            // var occupantContainer = document.querySelector(
-            //   '.occupant-container',
-            // );
-            // if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
-            // if (occupantContainer)
-            //   occupantContainer.style.backgroundColor = '#2c3e50';
-
-            // // 모든 버튼 비활성화 (투표 버튼 숨기기)
-            // document.getElementById('firstVoteContainer').style.display =
-            //   'none';
-            // document.getElementById('secondVoteContainer').style.display =
-            //   'none';
-
-            // 역할별 능력 버튼 초기화
-            document.getElementById('roleActionContainer').style.display =
-              'block';
-            document.getElementById('mafiaActionBtn').style.display = 'none';
-            document.getElementById('policeActionBtn').style.display = 'none';
-            document.getElementById('doctorActionBtn').style.display = 'none';
-
-            // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
-            if (currentUserRole === 'mafia') {
-              appendChatMessage(
-                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('mafiaActionBtn').style.display =
-                'inline-block';
-            } else if (currentUserRole === 'police') {
-              appendChatMessage(
-                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('policeActionBtn').style.display =
-                'inline-block';
-            } else if (currentUserRole === 'doctor') {
-              appendChatMessage(
-                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('doctorActionBtn').style.display =
-                'inline-block';
-            } else {
-              appendChatMessage(
-                `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
-                true,
-              );
-            }
-          });
-
-          // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-          socket.on('VOTE:FIRST:TARGET:EFFECT', function (data) {
-            console.log('VOTE:FIRST:TARGET:EFFECT 이벤트 수신:', data);
-            var winnerBtn = document.querySelector(
-              `.occupant-btn[data-userid="${data.winnerId}"]`,
-            );
-            if (winnerBtn) {
-              winnerBtn.classList.add('blink');
-            }
-            document.getElementById('firstVoteContainer').style.display =
-              'none';
-            document.getElementById('secondVoteContainer').style.display =
-              'block';
-          });
-
-          // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
-          socket.on('VOTE:SECOND:DEAD', function (data) {
-            console.log('VOTE:SECOND:DEAD 이벤트 수신:', data);
-            var targetId = data.targetId;
-            var targetBtn = document.querySelector(
-              `.occupant-btn[data-userid="${targetId}"]`,
-            );
-            if (targetBtn) {
-              targetBtn.classList.remove('blink'); // 깜빡임 제거
-              targetBtn.classList.remove('btn-outline-primary');
-              targetBtn.classList.add('btn-secondary');
-              targetBtn.disabled = true;
-            }
-            document.getElementById('secondVoteContainer').style.display =
-              'none';
-          });
-
-          // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거
-          socket.on('VOTE:SECOND:TIE', function (data) {
-            console.log('VOTE:SECOND:TIE 이벤트 수신:', data);
-            var targetId = data.targetId;
-            var targetBtn = document.querySelector(
-              `.occupant-btn[data-userid="${targetId}"]`,
-            );
-            if (targetBtn) {
-              targetBtn.classList.remove('blink'); // 깜빡임 제거
-              targetBtn.classList.remove('btn-outline-primary');
-            }
-            document.getElementById('secondVoteContainer').style.display =
-              'none';
-          });
-
-          // 1차 투표 확정 버튼 클릭 이벤트
-          document
-            .getElementById('voteBtn')
-            .addEventListener('click', function () {
-              if (!isVotingPhase) {
-                alert('현재 투표가 진행되지 않는 시기입니다.');
-                return;
-              }
-
-              if (!selectedTargetId) {
-                alert('투표할 대상을 선택하세요.');
-                return;
-              }
-              var voteBtn = document.getElementById('voteBtn');
-              voteBtn.disabled = true;
-              voteBtn.classList.add('disabled-btn');
-
-              socket.emit(
-                'VOTE:FIRST',
-                {
-                  roomId: roomId,
-                  voterId: currentUserId,
-                  targetId: Number(selectedTargetId),
-                },
-                function (response) {
-                  console.log('서버 응답 수신:', response);
-                  if (!response || !response.success) {
-                    alert(
-                      response?.message || '서버 응답이 올바르지 않습니다.',
-                    );
-                    return;
-                  }
-                  console.log('1차 투표 완료:', {
-                    voterId: currentUserId,
-                    targetId: selectedTargetId,
-                  });
-                  clearSelection();
-                },
-              );
-            });
-
-          // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-          socket.on('VOTE:SURVIVAL', function (data) {
-            console.log('VOTE:SURVIVAL 이벤트 수신:', data);
-            var winnerBtn = document.querySelector(
-              `.occupant-btn[data-userid="${data.winnerId}"]`,
-            );
-            if (winnerBtn) {
-              winnerBtn.classList.add('blink');
-            }
-            document.getElementById('firstVoteContainer').style.display =
-              'none';
-            document.getElementById('secondVoteContainer').style.display =
-              'block';
-          });
-
-          // 2차 투표: 사살 버튼 클릭 이벤트
-          document
-            .getElementById('executeBtn')
-            .addEventListener('click', function () {
-              var executeBtn = document.getElementById('executeBtn');
-              var survivalBtn = document.getElementById('survivalBtn');
-              executeBtn.disabled = true;
-              survivalBtn.disabled = true;
-              executeBtn.classList.add('disabled-btn');
-              survivalBtn.classList.add('disabled-btn');
-
-              socket.emit(
-                'VOTE:SECOND',
-                {
-                  roomId: roomId,
-                  voterId: currentUserId,
-                  execute: true,
-                },
-                function (response) {
-                  console.log('2차 투표 (사살) 응답:', response);
-                  document.getElementById('secondVoteContainer').style.display =
-                    'none';
-                },
-              );
-            });
-
-          // 2차 투표: 생존 버튼 클릭 이벤트
-          document
-            .getElementById('survivalBtn')
-            .addEventListener('click', function () {
-              var executeBtn = document.getElementById('executeBtn');
-              var survivalBtn = document.getElementById('survivalBtn');
-              executeBtn.disabled = true;
-              survivalBtn.disabled = true;
-              executeBtn.classList.add('disabled-btn');
-              survivalBtn.classList.add('disabled-btn');
-
-              socket.emit(
-                'VOTE:SECOND',
-                {
-                  roomId: roomId,
-                  voterId: currentUserId,
-                  execute: false,
-                },
-                function (response) {
-                  console.log('2차 투표 (생존) 응답:', response);
-                  document.getElementById('secondVoteContainer').style.display =
-                    'none';
-                },
-              );
-            });
+        socket = io('http://localhost:3000/room', {
+          auth: { roomId: roomId, userId: currentUserId },
         });
-      // 채팅 메시지 추가 함수
-      function appendChatMessage(message, isRole) {
-        var chatMessagesDiv = document.getElementById('chatMessages');
-        var messageElement = document.createElement('div');
-        if (isRole) {
-          messageElement.classList.add('role-message');
-        }
-        messageElement.textContent = message;
-        chatMessagesDiv.appendChild(messageElement);
 
-        // 스크롤 위치 업데이트
-        chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
-      }
+        // UI 표시
+        document.getElementById('mainContainer').style.display = 'flex';
+        document.getElementById('gameSection').style.display = 'block';
+        //document.getElementById('firstVoteContainer').style.display = 'block';
 
-      // 채팅 메시지 전송 함수
-      function sendChatMessage() {
-        var messageInputElem = document.getElementById('messageInput');
-        var message = messageInputElem ? messageInputElem.value : '';
-        if (message.trim() === '') return;
-        if (currentUserRole === 'mafia') {
-          // 마피아일 경우
-          socket.emit('chatMafia', {
-            roomId: roomId,
-            userId: currentUserId,
-            message: message,
-          });
-        } else if (currentUserIsAlive === false) {
-          // 죽은 플레이어일 경우
-          socket.emit('chatDead', {
-            roomId: roomId,
-            userId: currentUserId,
-            message: message,
-          });
-        } else {
-          socket.emit('chatMessage', {
-            roomId: roomId,
-            userId: currentUserId,
-            message: message,
-          });
-          if (messageInputElem) {
-            messageInputElem.value = '';
-          }
-        }
-      }
+        socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
+        socket.emit('requestRoomInfo', { roomId: roomId });
 
-      // 접속 인원 업데이트 함수
-      function updateOccupantList(roomData) {
-        console.log('접속 인원 업데이트:', roomData);
-        var occupantListDiv = document.getElementById('occupantList');
-        occupantListDiv.innerHTML = '';
-        var players = [];
-        try {
-          players =
-            typeof roomData.players === 'string'
-              ? JSON.parse(roomData.players)
-              : roomData.players;
-        } catch (error) {
-          players = [];
-        }
-        players.forEach(function (player) {
-          var btn = document.createElement('button');
-          if (player.id === currentUserId) {
-            btn.className = 'btn btn-secondary occupant-btn';
-            btn.disabled = true;
+        socket.once('ROOM:JOINED', function (data) {
+          roomInfo = data;
+          console.log('ROOM:JOINED 수신:', roomInfo);
+          updateOccupantList(roomInfo);
+        });
+
+        socket.on('ROOM:UPDATED', function (data) {
+          roomInfo = data;
+          console.log('ROOM:UPDATED 수신:', roomInfo);
+          updateOccupantList(roomInfo);
+        });
+
+        socket.on('message', function (data) {
+          appendChatMessage('[' + data.sender + '] ' + data.message);
+        });
+
+        socket.on('CHAT:DEAD', function (data) {
+          appendChatMessage('[' + data.sender + '] ' + data.message);
+        });
+
+        socket.on('CHAT:MAFIA', function (data) {
+          appendChatMessage('[' + data.sender + '] ' + data.message);
+        });
+
+        socket.on('system_message', function (data) {
+          appendChatMessage(`[공지] ${data.message}`, true);
+        });
+
+        document
+          .getElementById('sendBtn')
+          .addEventListener('click', sendChatMessage);
+
+        socket.on('YOUR_ROLE', function (data) {
+          appendChatMessage(data.message, true);
+        });
+
+        socket.on('error', function (data) {
+          alert('게임 에러: ' + data.message);
+        });
+
+        socket.on('NIGHT:BACKGROUND', function (data) {
+          console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+          // 전체 배경은 검정색으로
+          document.body.style.backgroundColor = 'black';
+          // div 배경은 순수 흰색 대신 연한 회색으로 변경
+          var chatContainer = document.querySelector('.chat-container');
+          var occupantContainer = document.querySelector(
+            '.occupant-container',
+          );
+          if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+          if (occupantContainer)
+            occupantContainer.style.backgroundColor = '#e0e0e0';
+        });
+
+        // 서버로부터 1차 투표 버튼 보이라는 이벤트 수신 시 처리
+        socket.on('VOTE:FIRST:ENABLE', function (data) {
+          isVotingPhase = true;
+          document.getElementById('firstVoteContainer').style.display =
+            'block';
+        });
+
+        // 추가된 부분: gameEnd 이벤트 핸들러 등록
+        socket.on('gameEnd', function (data) {
+          // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
+          appendChatMessage('게임 종료: ' + data.message);
+          document.getElementById('gameStatus').textContent = data.message;
+          console.log('게임 종료 데이터:', data);
+        });
+
+        socket.on('NIGHT:PHASE', function (data) {
+          console.log('NIGHT:PHASE 이벤트 수신:', data);
+
+          // 메시지를 채팅창에 출력
+          appendChatMessage(`[SYSTEM] ${data.message}`, true);
+
+          // // UI 변경 - 배경 어둡게 변경
+          // document.body.style.backgroundColor = 'black';
+
+          // // 컨테이너 배경 변경 (밤 테마 적용)
+          // var chatContainer = document.querySelector('.chat-container');
+          // var occupantContainer = document.querySelector(
+          //   '.occupant-container',
+          // );
+          // if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
+          // if (occupantContainer)
+          //   occupantContainer.style.backgroundColor = '#2c3e50';
+
+          // // 모든 버튼 비활성화 (투표 버튼 숨기기)
+          // document.getElementById('firstVoteContainer').style.display =
+          //   'none';
+          // document.getElementById('secondVoteContainer').style.display =
+          //   'none';
+
+          // 역할별 능력 버튼 초기화
+          document.getElementById('roleActionContainer').style.display =
+            'block';
+          document.getElementById('mafiaActionBtn').style.display = 'none';
+          document.getElementById('policeActionBtn').style.display = 'none';
+          document.getElementById('doctorActionBtn').style.display = 'none';
+
+          // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
+          if (currentUserRole === 'mafia') {
+            appendChatMessage(
+              `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
+              true,
+            );
+            document.getElementById('mafiaActionBtn').style.display =
+              'inline-block';
+          } else if (currentUserRole === 'police') {
+            appendChatMessage(
+              `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
+              true,
+            );
+            document.getElementById('policeActionBtn').style.display =
+              'inline-block';
+          } else if (currentUserRole === 'doctor') {
+            appendChatMessage(
+              `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
+              true,
+            );
+            document.getElementById('doctorActionBtn').style.display =
+              'inline-block';
           } else {
-            btn.className = 'btn btn-outline-primary occupant-btn';
-          }
-          btn.textContent = '사용자 ' + player.id;
-          btn.dataset.userid = player.id;
-          btn.addEventListener('click', function () {
-            var allBtns = document.querySelectorAll(
-              '.occupant-btn:not([disabled])',
+            appendChatMessage(
+              `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
+              true,
             );
-            allBtns.forEach(function (b) {
-              b.classList.remove('selected');
-            });
-            btn.classList.add('selected');
-            selectedTargetId = Number(btn.dataset.userid);
-            console.log('선택된 대상:', selectedTargetId);
-          });
-          occupantListDiv.appendChild(btn);
+          }
         });
-      }
 
-      // 선택 해제 함수
-      function clearSelection() {
-        var allBtns = document.querySelectorAll('.occupant-btn');
-        allBtns.forEach(function (b) {
-          b.classList.remove('selected');
+        // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+        socket.on('VOTE:FIRST:TARGET:EFFECT', function (data) {
+          console.log('VOTE:FIRST:TARGET:EFFECT 이벤트 수신:', data);
+          var winnerBtn = document.querySelector(
+            `.occupant-btn[data-userid="${data.winnerId}"]`,
+          );
+          if (winnerBtn) {
+            winnerBtn.classList.add('blink');
+          }
+          document.getElementById('firstVoteContainer').style.display =
+            'none';
+          document.getElementById('secondVoteContainer').style.display =
+            'block';
         });
-        selectedTargetId = null;
+
+        // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
+        socket.on('VOTE:SECOND:DEAD', function (data) {
+          console.log('VOTE:SECOND:DEAD 이벤트 수신:', data);
+          var targetId = data.targetId;
+          var targetBtn = document.querySelector(`.occupant-btn[data-userid="${targetId}"]`);
+          if (targetBtn) {
+            targetBtn.classList.remove('blink'); // 깜빡임 제거
+            // targetBtn.classList.remove('selected'); // 선택 상태 제거하여 파란색 해제
+            targetBtn.classList.remove('btn-outline-primary');
+            targetBtn.classList.add('btn-secondary');
+            targetBtn.disabled = true;
+            targetBtn.classList.add('no-hover'); // hover 효과 끄기
+          }
+          document.getElementById('secondVoteContainer').style.display = 'none';
+        });
+
+        // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거
+        socket.on('VOTE:SECOND:TIE', function (data) {
+          console.log('VOTE:SECOND:TIE 이벤트 수신:', data);
+          var targetId = data.targetId;
+          var targetBtn = document.querySelector(
+            `.occupant-btn[data-userid="${targetId}"]`,
+          );
+          if (targetBtn) {
+            targetBtn.classList.remove('blink'); // 깜빡임 제거
+            targetBtn.classList.remove('btn-outline-primary');
+          }
+          document.getElementById('secondVoteContainer').style.display =
+            'none';
+        });
+
+        // 1차 투표 확정 버튼 클릭 이벤트
+        document
+          .getElementById('voteBtn')
+          .addEventListener('click', function () {
+            if (!isVotingPhase) {
+              alert('현재 투표가 진행되지 않는 시기입니다.');
+              return;
+            }
+
+            if (!selectedTargetId) {
+              alert('투표할 대상을 선택하세요.');
+              return;
+            }
+            var voteBtn = document.getElementById('voteBtn');
+            voteBtn.disabled = true;
+            voteBtn.classList.add('disabled-btn');
+
+            socket.emit(
+              'VOTE:FIRST',
+              {
+                roomId: roomId,
+                voterId: currentUserId,
+                targetId: Number(selectedTargetId),
+              },
+              function (response) {
+                console.log('서버 응답 수신:', response);
+                if (!response || !response.success) {
+                  alert(
+                    response?.message || '서버 응답이 올바르지 않습니다.',
+                  );
+                  return;
+                }
+                console.log('1차 투표 완료:', {
+                  voterId: currentUserId,
+                  targetId: selectedTargetId,
+                });
+                clearSelection();
+              },
+            );
+          });
+
+        // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+        socket.on('VOTE:SURVIVAL', function (data) {
+          console.log('VOTE:SURVIVAL 이벤트 수신:', data);
+          var winnerBtn = document.querySelector(
+            `.occupant-btn[data-userid="${data.winnerId}"]`,
+          );
+          if (winnerBtn) {
+            winnerBtn.classList.add('blink');
+          }
+          document.getElementById('firstVoteContainer').style.display =
+            'none';
+          document.getElementById('secondVoteContainer').style.display =
+            'block';
+        });
+
+        // 2차 투표: 사살 버튼 클릭 이벤트
+        document
+          .getElementById('executeBtn')
+          .addEventListener('click', function () {
+            var executeBtn = document.getElementById('executeBtn');
+            var survivalBtn = document.getElementById('survivalBtn');
+            executeBtn.disabled = true;
+            survivalBtn.disabled = true;
+            executeBtn.classList.add('disabled-btn');
+            survivalBtn.classList.add('disabled-btn');
+
+            socket.emit(
+              'VOTE:SECOND',
+              {
+                roomId: roomId,
+                voterId: currentUserId,
+                execute: true,
+              },
+              function (response) {
+                console.log('2차 투표 (사살) 응답:', response);
+                document.getElementById('secondVoteContainer').style.display =
+                  'none';
+              },
+            );
+          });
+
+        // 2차 투표: 생존 버튼 클릭 이벤트
+        document
+          .getElementById('survivalBtn')
+          .addEventListener('click', function () {
+            var executeBtn = document.getElementById('executeBtn');
+            var survivalBtn = document.getElementById('survivalBtn');
+            executeBtn.disabled = true;
+            survivalBtn.disabled = true;
+            executeBtn.classList.add('disabled-btn');
+            survivalBtn.classList.add('disabled-btn');
+
+            socket.emit(
+              'VOTE:SECOND',
+              {
+                roomId: roomId,
+                voterId: currentUserId,
+                execute: false,
+              },
+              function (response) {
+                console.log('2차 투표 (생존) 응답:', response);
+                document.getElementById('secondVoteContainer').style.display =
+                  'none';
+              },
+            );
+          });
+      });
+    // 채팅 메시지 추가 함수
+    function appendChatMessage(message, isRole) {
+      var chatMessagesDiv = document.getElementById('chatMessages');
+      var messageElement = document.createElement('div');
+      if (isRole) {
+        messageElement.classList.add('role-message');
       }
-    </script>
-  </body>
+      messageElement.textContent = message;
+      chatMessagesDiv.appendChild(messageElement);
+
+      // 스크롤 위치 업데이트
+      chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+    }
+
+    // 채팅 메시지 전송 함수
+    function sendChatMessage() {
+      var messageInputElem = document.getElementById('messageInput');
+      var message = messageInputElem ? messageInputElem.value : '';
+      if (message.trim() === '') return;
+      if (currentUserRole === 'mafia') {
+        // 마피아일 경우
+        socket.emit('chatMafia', {
+          roomId: roomId,
+          userId: currentUserId,
+          message: message,
+        });
+      } else if (currentUserIsAlive === false) {
+        // 죽은 플레이어일 경우
+        socket.emit('chatDead', {
+          roomId: roomId,
+          userId: currentUserId,
+          message: message,
+        });
+      } else {
+        socket.emit('chatMessage', {
+          roomId: roomId,
+          userId: currentUserId,
+          message: message,
+        });
+        if (messageInputElem) {
+          messageInputElem.value = '';
+        }
+      }
+    }
+
+    // 접속 인원 업데이트 함수
+    function updateOccupantList(roomData) {
+      console.log('접속 인원 업데이트:', roomData);
+      var occupantListDiv = document.getElementById('occupantList');
+      occupantListDiv.innerHTML = '';
+      var players = [];
+      try {
+        players =
+          typeof roomData.players === 'string'
+            ? JSON.parse(roomData.players)
+            : roomData.players;
+      } catch (error) {
+        players = [];
+      }
+      players.forEach(function (player) {
+        var btn = document.createElement('button');
+        if (player.id === currentUserId) {
+          btn.className = 'btn btn-secondary occupant-btn';
+          btn.disabled = true;
+        } else {
+          btn.className = 'btn btn-outline-primary occupant-btn';
+        }
+        btn.textContent = '사용자 ' + player.id;
+        btn.dataset.userid = player.id;
+        btn.addEventListener('click', function () {
+          var allBtns = document.querySelectorAll(
+            '.occupant-btn:not([disabled])',
+          );
+          allBtns.forEach(function (b) {
+            // b.classList.remove('selected');
+          });
+          // btn.classList.add('selected');
+          selectedTargetId = Number(btn.dataset.userid);
+          console.log('선택된 대상:', selectedTargetId);
+        });
+        occupantListDiv.appendChild(btn);
+      });
+    }
+
+    // 선택 해제 함수
+    function clearSelection() {
+      var allBtns = document.querySelectorAll('.occupant-btn');
+      allBtns.forEach(function (b) {
+        // b.classList.remove('selected');
+      });
+      selectedTargetId = null;
+    }
+  </script>
+</body>
+
 </html>
