@@ -118,7 +118,7 @@ export class GameService {
       Object.entries(initialGameState).map(([field, value]) =>
         this.redisClient.hset(redisKey, field, value),
       ),
-    );
+    ); // room:${roomId}:game:${gameId} 해시값
 
     // 현재 진행 중인 게임 ID 저장
     await this.redisClient.set(`room:${roomId}:currentGameId`, gameId);
@@ -148,7 +148,7 @@ export class GameService {
       'police',
       'doctor',
     ];
-    rolesPool.sort(() => Math.random() - 0.5);
+    rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
 
     const updatedPlayers = players.map((player, index) => ({
       ...player,
@@ -187,21 +187,23 @@ export class GameService {
     return currentDay;
   }
 
-  // 플레이어 사망 처리
+  // 플레이어 사망
   async killPlayers(roomId: string, playerIds: number[]): Promise<void> {
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
+
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
+    let currentCitizenCounts = gameData.citizenCount;
+    let currentMafiaCounts = gameData.mafiaCount;
 
-    console.log(`사망 처리 전 플레이어 목록:`, players);
-
+    // 선택된 플레이어의 isAlive 속성을 false로 변경
     const updatedPlayers = players.map((player) => {
       if (playerIds.includes(player.id)) {
-        console.log(`플레이어 ${player.id} 사망 처리`);
+        player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
         return { ...player, isAlive: false };
       }
       return player;
@@ -212,6 +214,14 @@ export class GameService {
       'players',
       JSON.stringify(updatedPlayers),
     );
+    if (currentMafiaCounts < gameData.mafiaCount)
+      await this.redisClient.hset(redisKey, 'mafiaCount', currentMafiaCounts);
+    if (currentCitizenCounts < gameData.citizenCount)
+      await this.redisClient.hset(
+        redisKey,
+        'citizenCount',
+        currentCitizenCounts,
+      );
 
     // 🔹 데이터 확인을 위해 사망자 목록 가져오기
     const deadPlayers = updatedPlayers.filter((player) => !player.isAlive);
@@ -323,48 +333,6 @@ export class GameService {
         tieCandidates: candidates,
       };
     }
-  }
-
-  //n. 밤 시작
-  //2차례의 투표 종료 후 15초간 밤이 됩니다.
-  //마피아는 의논 후에 사살 대상을 선택할 수 있고
-  //의사는 살릴 사람을 선택할 수 있고
-  //경찰은 조사 대상을 선택할 수 있습니다.
-  //getMafias
-  //마피아를 배정받은 사람들을 구합니다.
-  //마피아끼리 대화할 때 메세지를 이들에게 전송합니다.
-  // async startNightPhase(roomId: string, gameId: string): Promise<number> {
-  //   // 들어온 인자로 레디스 키 구성
-  //   const redisKey = `room:${roomId}:game:${gameId}`;
-  //   // 현재 게임 데이터를 get
-  //   const gameData = await this.getGameData(roomId, gameId);
-
-  //   // 현재 day 값을 숫자로 변환 (초기 상태가 "0" 또는 없을 경우 기본값 0)
-  //   let currentDay = parseInt(gameData.day, 10) || 0;
-  //   await this.redisClient.hset(redisKey, 'phase', 'night');
-  //   return currentDay;
-  // }
-
-  //수신자: 마피아
-  async getMafias(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 마피아인 플레이어만 필터링합니다.
-    const mafias = players.filter((player) => player.role === 'mafia');
-
-    return mafias;
-  }
-
-  //수신자: 시체
-  async getDead(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 죽은 사람을 검색
-    const dead = players.filter((player) => player.isAlive === false);
-
-    return dead;
   }
 
   // 2차 투표 진행
@@ -506,6 +474,29 @@ export class GameService {
   // ──────────────────────────────
   // (필요시) 게임 종료 관련 메서드
   // ──────────────────────────────
+
+  //수신자: 마피아
+  async getMafias(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 마피아인 플레이어만 필터링합니다.
+    const mafias = players.filter((player) => player.role === 'mafia');
+
+    return mafias;
+  }
+
+  //수신자: 시체
+  async getDead(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 죽은 사람을 검색
+    const dead = players.filter((player) => player.isAlive === false);
+
+    return dead;
+  }
+
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);
   //   if (!gameId) {
