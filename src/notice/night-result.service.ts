@@ -1,6 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { RoomGateway } from 'src/room/room.gateway';
-import { GameService, Player } from 'src/game/game.service';
+import { Player } from 'src/game/game.service';
 
 @Injectable()
 export class NightResultService {
@@ -43,12 +43,7 @@ export class NightResultService {
   }
 
   announceFirstVoteStart(roomId: string, dayNumber: number): void {
-    const message = `${dayNumber}번째 낮 대상자 투표가 시작 되었습니다. 15초 후 투표가 마감 됩니다.`;
-    this.announceSystemMessage(roomId, message);
-  }
-
-  announceSecondVoteStart(roomId: string, dayNumber: number): void {
-    const message = `${dayNumber}번째 낮 생존 투표가 시작 되었습니다. 45초 후 투표가 마감 됩니다.`;
+    const message = `${dayNumber}번째 낮 대상자 투표가 시작 되었습니다., 15초 후 마감 됩니다.`;
     this.announceSystemMessage(roomId, message);
   }
 
