@@ -210,7 +210,6 @@ export class GameService {
       return player;
     });
 
-    // 업데이트된 플레이어 목록을 Redis에 저장
     await this.redisClient.hset(
       redisKey,
       'players',
@@ -224,6 +223,10 @@ export class GameService {
         'citizenCount',
         currentCitizenCounts,
       );
+
+    // 🔹 데이터 확인을 위해 사망자 목록 가져오기
+    const deadPlayers = updatedPlayers.filter((player) => !player.isAlive);
+    console.log(`사망 처리 후 사망자 목록:`, deadPlayers);
   }
 
   // ──────────────────────────────
@@ -377,18 +380,28 @@ export class GameService {
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
+
     const secondVoteKey = `room:${roomId}:game:${gameId}:secondVote`;
     const votes = await this.redisClient.get(secondVoteKey);
     if (!votes) {
-      return { execute: false, voteCount: 0, tie: false };
+      return {
+        execute: false,
+        voteCount: 0,
+        tie: false,
+        executeVoterIds: [],
+        surviveVoterIds: [],
+      };
     }
+
     const voteArray: { voterId: number; execute: boolean }[] =
       JSON.parse(votes);
     let executeCount = 0;
     let surviveCount = 0;
+
     voteArray.forEach((vote) => {
       vote.execute ? executeCount++ : surviveCount++;
     });
+
     console.log(
       `2차 투표 집계 결과: 사살(${executeCount}) vs 생존(${surviveCount})`,
     );
@@ -516,4 +529,272 @@ export class GameService {
   //   await this.redisClient.del(`room:${roomId}:currentGameId`);
   //   console.log(`게임 ${gameId} 데이터 삭제 완료`);
   // }
+  async endGame(roomId: string): Promise<any> {
+    // 현재 진행 중인 게임 ID 가져오기
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      console.log(`room:${roomId}에 진행 중인 게임이 없음.`);
+      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
+    }
+
+    // Redis에서 게임 데이터를 저장하는 키 생성
+    const gameKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+
+    // 게임에 참여한 플레이어 목록 가져오기
+    const players: Player[] = gameData.players;
+
+    // 생존한 마피아와 시민 수 카운트
+    const aliveMafias = players.filter(
+      (player) => player.role === 'mafia' && player.isAlive,
+    ).length;
+    const aliveCitizens = players.filter(
+      (player) => player.role !== 'mafia' && player.isAlive,
+    ).length;
+
+    let winningTeam = ''; // 최종 승리 팀 저장 변수
+
+    // 게임 종료 조건 판단
+    if (aliveMafias >= aliveCitizens) {
+      winningTeam = 'mafia'; // 마피아 수가 시민 이상이면 마피아 승리
+    } else if (aliveMafias === 0) {
+      winningTeam = 'citizens'; // 마피아가 모두 죽으면 시민 승리
+    } else {
+      return { message: '게임이 아직 끝나지 않았습니다.' }; // 아직 게임 종료 조건을 충족하지 않음
+    }
+
+    // 최종 게임 상태 데이터 구성 (각 플레이어의 역할 및 생존 여부 포함)
+    const finalState = {
+      players: players.map((player) => ({
+        userId: player.id,
+        role: player.role,
+        alive: player.isAlive,
+      })),
+    };
+
+    // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
+    await this.redisClient.del(gameKey);
+    await this.redisClient.del(`room:${roomId}:currentGameId`);
+
+    // 최종 게임 결과 반환
+    const result = {
+      roomId,
+      winningTeam,
+      finalState,
+      message: `게임 종료: ${winningTeam === 'mafia' ? '마피아' : '시민'} 승리!`,
+    };
+
+    return result;
+  }
+
+  // 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
+  async getPlayerByRole(roomId: string, role: string): Promise<number | null> {
+    const redisKey = `room:${roomId}:game`;
+    const playersData = await this.redisClient.hget(redisKey, 'players');
+    const players = JSON.parse(playersData || '[]');
+
+    const player = players.find((p: any) => p.role === role && p.isAlive);
+    return player ? Number(player.id) : null;
+  }
+
+  // 2. NIGHT 시작 - 게임 상태 변경
+  async startNightPhase(
+    roomId: string,
+    gameId?: string,
+  ): Promise<{ nightNumber: number; mafias: Player[]; dead: Player[] }> {
+    const redisKey = gameId
+      ? `room:${roomId}:game:${gameId}`
+      : `room:${roomId}:game`;
+
+    console.log(`방 ${roomId} - 밤으로 전환됨.`);
+
+    // 현재 게임 데이터를 가져올 필요가 있는 경우만 가져오기
+    let currentDay = 0;
+    if (gameId) {
+      const gameData = await this.getGameData(roomId, gameId);
+      currentDay = parseInt(gameData.day, 10) || 0;
+    }
+
+    // 게임의 phase를 `night`로 설정
+    await this.redisClient.hset(redisKey, 'phase', 'night');
+
+    // 밤 횟수 관리 (nightNumber 증가)
+    const nightNumber = await this.getNightCount(roomId);
+
+    // 마피아 목록 및 사망자 목록 조회 (gameId가 존재할 때만 실행)
+    const mafias = gameId ? await this.getMafias(roomId, gameId) : [];
+    const dead = gameId ? await this.getDead(roomId, gameId) : [];
+
+    //  클라이언트에 밤 시작 이벤트 전송
+    this.nightResultService.announceNightStart(roomId, mafias, dead);
+
+    console.log(
+      `방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
+    );
+
+    return { nightNumber, mafias, dead };
+  }
+
+  // 3. 마피아 공격 대상 저장
+  async selectMafiaTarget(
+    roomId: string,
+    userId: number | string,
+    targetUserId: number | string,
+  ): Promise<void> {
+    const userIdNum = Number(userId);
+    const targetUserIdNum = Number(targetUserId);
+
+    const redisKey = `room:${roomId}:game`;
+    await this.redisClient.hset(
+      redisKey,
+      'mafiaTarget',
+      targetUserIdNum.toString(),
+    );
+
+    console.log(`마피아(${userIdNum})가 ${targetUserIdNum}를 대상으로 선택함.`);
+  }
+
+  // 4. 경찰 조사 대상 저장
+  async savePoliceTarget(
+    roomId: string,
+    targetUserId: number | string,
+  ): Promise<void> {
+    const targetUserIdNum = Number(targetUserId);
+    const redisKey = `room:${roomId}:game`;
+
+    await this.redisClient.hset(
+      redisKey,
+      'policeTarget',
+      targetUserIdNum.toString(),
+    );
+  }
+
+  // 5. 의사 보호 대상 저장
+  async saveDoctorTarget(
+    roomId: string,
+    targetUserId: number | string,
+  ): Promise<void> {
+    const targetUserIdNum = Number(targetUserId);
+    const redisKey = `room:${roomId}:game`;
+
+    await this.redisClient.hset(
+      redisKey,
+      'doctorTarget',
+      targetUserIdNum.toString(),
+    );
+  }
+
+  // 6. 경찰 조사 결과 조회
+  async getPoliceResult(roomId: string): Promise<{
+    policeId: number | null;
+    targetUserId: number | null;
+    role: string | null;
+  }> {
+    const policeId = await this.getPlayerByRole(roomId, 'police');
+    if (!policeId) return { policeId: null, targetUserId: null, role: null };
+
+    const redisKey = `room:${roomId}:game`;
+    const policeTarget = await this.redisClient.hget(redisKey, 'policeTarget');
+    if (!policeTarget) return { policeId, targetUserId: null, role: null };
+
+    const playersData = await this.redisClient.hget(redisKey, 'players');
+    const players = JSON.parse(playersData || '[]');
+
+    const targetPlayer = players.find(
+      (p: any) => p.id === Number(policeTarget),
+    );
+    const role = targetPlayer?.role === 'mafia' ? 'mafia' : 'citizen';
+
+    return { policeId, targetUserId: Number(policeTarget), role };
+  }
+
+  // 7. 밤 결과 처리
+  async processNightResult(
+    roomId: string,
+  ): Promise<{ killedUserId: number | null; details: string }> {
+    const redisKey = `room:${roomId}:game`;
+
+    const mafiaTarget = await this.redisClient.hget(redisKey, 'mafiaTarget');
+    const doctorTarget = await this.redisClient.hget(redisKey, 'doctorTarget');
+
+    let killedUserId = mafiaTarget ? Number(mafiaTarget) : null;
+    let details = '마피아 공격 성공';
+
+    if (
+      mafiaTarget &&
+      doctorTarget &&
+      Number(mafiaTarget) === Number(doctorTarget)
+    ) {
+      killedUserId = null;
+      details = '의사 보호로 인해 살해 취소됨';
+    } else if (mafiaTarget) {
+      await this.markPlayerAsDead(roomId, Number(mafiaTarget));
+    }
+
+    const endCheck = await this.checkEndGame(roomId);
+    if (endCheck.isGameOver) {
+      await this.endGame(roomId);
+    }
+
+    return { killedUserId, details };
+  }
+
+  // 8. 플레이어 사망 처리
+  async markPlayerAsDead(roomId: string, playerId: number): Promise<void> {
+    const redisKey = `room:${roomId}:game`;
+    const playersData = await this.redisClient.hget(redisKey, 'players');
+    const players = JSON.parse(playersData || '[]');
+
+    const player = players.find((p: any) => p.id === playerId);
+    if (player) player.isAlive = false;
+
+    await this.redisClient.hset(redisKey, 'players', JSON.stringify(players));
+  }
+
+  // 9. 밤 횟수 관리
+  async getNightCount(roomId: string): Promise<number> {
+    const redisKey = `room:${roomId}:game`;
+    const nightNumber = await this.redisClient.hget(redisKey, 'nightNumber');
+    const newNightCount = nightNumber ? parseInt(nightNumber) + 1 : 1;
+
+    await this.redisClient.hset(
+      redisKey,
+      'nightNumber',
+      newNightCount.toString(),
+    );
+    return newNightCount;
+  }
+
+  async checkEndGame(
+    roomId: string,
+  ): Promise<{ isGameOver: boolean; winningTeam: string | null }> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) {
+      console.log(`room:${roomId}에 진행 중인 게임이 없음.`);
+      return { isGameOver: false, winningTeam: null };
+    }
+
+    // 현재 게임 데이터를 조회
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 생존한 마피아와 시민 수 카운트
+    const aliveMafias = players.filter(
+      (player) => player.role === 'mafia' && player.isAlive,
+    ).length;
+    const aliveCitizens = players.filter(
+      (player) => player.role !== 'mafia' && player.isAlive,
+    ).length;
+
+    // 게임 종료 조건 판단
+    if (aliveMafias >= aliveCitizens) {
+      console.log(`게임 종료 - 마피아 승리`);
+      return { isGameOver: true, winningTeam: 'mafia' };
+    } else if (aliveMafias === 0) {
+      console.log(`게임 종료 - 시민 승리`);
+      return { isGameOver: true, winningTeam: 'citizens' };
+    }
+
+    return { isGameOver: false, winningTeam: null };
+  }
 }

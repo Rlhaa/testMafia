@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import {
   Injectable,
   NotFoundException,
@@ -25,7 +27,6 @@ export class RoomService {
   // 내부 맵: 사용자 소켓 및 방 타이머 관리
   // ──────────────────────────────
   private userSocketMap: Map<number, string> = new Map();
-  private roomCountdownTimers: Map<string, NodeJS.Timeout> = new Map();
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
@@ -259,10 +260,8 @@ export class RoomService {
 
     // 인원이 8명 미만이면 진행 중인 게임 시작 타이머 취소
     const sockets = await server.in(roomId).allSockets();
-    if (sockets.size < 8 && this.roomCountdownTimers.has(roomId)) {
-      const timer = this.roomCountdownTimers.get(roomId)!;
-      clearTimeout(timer);
-      this.roomCountdownTimers.delete(roomId);
+    if (sockets.size < 8 && this.timerService.hasTimer(roomId, 'gamestart')) {
+      this.timerService.cancelTimer(roomId, 'gamestart');
       // [수정] 타이머 취소 공지: 기존 sendSystemMessage 대신 NightResultService의 announceCancelTimer 호출
       this.nightResultService.announceCancelTimer(roomId);
     }

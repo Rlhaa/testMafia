@@ -1,5 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { RoomGateway } from 'src/room/room.gateway';
+import { Player } from 'src/game/game.service';
 
 @Injectable()
 export class NightResultService {
@@ -100,53 +101,61 @@ export class NightResultService {
     this.announceSystemMessage(roomId, message);
   }
 
-  
-  // // GameService에서 새로 호출하는 공지 함수들 아직 정확하게 이해를 하지 못했습니다.
-
-  // announceGameCreated(roomId: string, gameId: string): void {
-  //   const message = `게임이 생성되었습니다. 게임 ID: ${gameId}`;
-  //   this.roomGateway.broadcastNotice(roomId, 'game_created', message, {
-  //     gameId,
-  //   });
-  // }
-
-  // announceRolesAssigned(
-  //   roomId: string,
-  //   gameId: string,
-  //   players: Player[],
-  // ): void {
-  //   const message = `역할이 분배되었습니다.`;
-  //   // 주의: 실제 게임에서는 플레이어의 역할 정보가 공개되면 안 될 수 있음
-  //   this.roomGateway.broadcastNotice(roomId, 'roles_assigned', message, {
-  //     gameId,
-  //     players,
-  //   });
-  // }
-
-  // announceVoteResult(
-  //   roomId: string,
-  //   gameId: string,
-  //   voteResult: { winnerId: number | null; voteCount: number },
-  // ): void {
-  //   let message = '';
-  //   if (voteResult.winnerId !== null) {
-  //     message = `투표 결과: ${voteResult.winnerId}번 플레이어가 처형됩니다. (득표수: ${voteResult.voteCount})`;
-  //   } else {
-  //     message = `투표 결과가 동점입니다.`;
-  //   }
-  //   this.roomGateway.broadcastNotice(roomId, 'vote_result', message, {
-  //     gameId,
-  //     voteResult,
-  //   });
-  // }
-
-  // sendNightResult(roomId: string, gameId: string, nightResult: any): void {
-  //   // nightResult는 message 프로퍼티를 포함하는 객체라고 가정합니다.
-  //   this.roomGateway.broadcastNotice(
-  //     roomId,
-  //     'night_result',
-  //     nightResult.message,
-  //     { gameId, nightResult },
-  //   );
-  // }
+  // 밤 시작을 클라이언트에 알리는 함수
+  announceNightStart(roomId: string, mafias: Player[], dead: Player[]): void {
+    const message = `밤이 시작되었습니다.`;
+    this.roomGateway.broadcastNotice(roomId, 'night_start', message, {
+      mafias,
+      dead,
+    });
+  }
 }
+
+// // GameService에서 새로 호출하는 공지 함수들 아직 정확하게 이해를 하지 못했습니다.
+
+// announceGameCreated(roomId: string, gameId: string): void {
+//   const message = `게임이 생성되었습니다. 게임 ID: ${gameId}`;
+//   this.roomGateway.broadcastNotice(roomId, 'game_created', message, {
+//     gameId,
+//   });
+// }
+
+// announceRolesAssigned(
+//   roomId: string,
+//   gameId: string,
+//   players: Player[],
+// ): void {
+//   const message = `역할이 분배되었습니다.`;
+//   // 주의: 실제 게임에서는 플레이어의 역할 정보가 공개되면 안 될 수 있음
+//   this.roomGateway.broadcastNotice(roomId, 'roles_assigned', message, {
+//     gameId,
+//     players,
+//   });
+// }
+
+// announceVoteResult(
+//   roomId: string,
+//   gameId: string,
+//   voteResult: { winnerId: number | null; voteCount: number },
+// ): void {
+//   let message = '';
+//   if (voteResult.winnerId !== null) {
+//     message = `투표 결과: ${voteResult.winnerId}번 플레이어가 처형됩니다. (득표수: ${voteResult.voteCount})`;
+//   } else {
+//     message = `투표 결과가 동점입니다.`;
+//   }
+//   this.roomGateway.broadcastNotice(roomId, 'vote_result', message, {
+//     gameId,
+//     voteResult,
+//   });
+// }
+
+// sendNightResult(roomId: string, gameId: string, nightResult: any): void {
+//   // nightResult는 message 프로퍼티를 포함하는 객체라고 가정합니다.
+//   this.roomGateway.broadcastNotice(
+//     roomId,
+//     'night_result',
+//     nightResult.message,
+//     { gameId, nightResult },
+//   );
+// }
