@@ -199,7 +199,7 @@
         <div id="occupantList"></div>
       </div>
     </div>
-    <!-- 투표 확정 버튼 -->
+    <!-- 투표 확정 버튼 컨테이너 (기본적으로 숨김) -->
     <div id="firstVoteContainer" style="display: none; margin-top: 10px">
       <button id="voteBtn" class="btn btn-success">투표 확정</button>
       <p id="voteStatus"></p>
@@ -253,6 +253,7 @@
       document.getElementById('roomTitle').textContent =
         '채팅룸 (룸 ' + roomId + ')';
 
+      var isVotingPhase = false;
       var currentUserId;
       var sender;
       var socket; // 단일 소켓
@@ -278,7 +279,7 @@
           // UI 표시
           document.getElementById('mainContainer').style.display = 'flex';
           document.getElementById('gameSection').style.display = 'block';
-          document.getElementById('firstVoteContainer').style.display = 'block';
+          //document.getElementById('firstVoteContainer').style.display = 'block';
 
           socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
           socket.emit('requestRoomInfo', { roomId: roomId });
@@ -325,6 +326,27 @@
             alert('게임 에러: ' + data.message);
           });
 
+          socket.on('NIGHT:BACKGROUND', function (data) {
+            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+            // 전체 배경은 검정색으로
+            document.body.style.backgroundColor = 'black';
+            // div 배경은 순수 흰색 대신 연한 회색으로 변경
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#e0e0e0';
+          });
+
+          // 서버로부터 1차 투표 버튼 보이라는 이벤트 수신 시 처리
+          socket.on('VOTE:FIRST:ENABLE', function (data) {
+            isVotingPhase = true;
+            document.getElementById('firstVoteContainer').style.display =
+              'block';
+          });
+
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
           socket.on('gameEnd', function (data) {
             // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
@@ -339,23 +361,23 @@
             // 메시지를 채팅창에 출력
             appendChatMessage(`[SYSTEM] ${data.message}`, true);
 
-            // UI 변경 - 배경 어둡게 변경
-            document.body.style.backgroundColor = 'black';
+            // // UI 변경 - 배경 어둡게 변경
+            // document.body.style.backgroundColor = 'black';
 
-            // 컨테이너 배경 변경 (밤 테마 적용)
-            var chatContainer = document.querySelector('.chat-container');
-            var occupantContainer = document.querySelector(
-              '.occupant-container',
-            );
-            if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
-            if (occupantContainer)
-              occupantContainer.style.backgroundColor = '#2c3e50';
+            // // 컨테이너 배경 변경 (밤 테마 적용)
+            // var chatContainer = document.querySelector('.chat-container');
+            // var occupantContainer = document.querySelector(
+            //   '.occupant-container',
+            // );
+            // if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
+            // if (occupantContainer)
+            //   occupantContainer.style.backgroundColor = '#2c3e50';
 
-            // 모든 버튼 비활성화 (투표 버튼 숨기기)
-            document.getElementById('firstVoteContainer').style.display =
-              'none';
-            document.getElementById('secondVoteContainer').style.display =
-              'none';
+            // // 모든 버튼 비활성화 (투표 버튼 숨기기)
+            // document.getElementById('firstVoteContainer').style.display =
+            //   'none';
+            // document.getElementById('secondVoteContainer').style.display =
+            //   'none';
 
             // 역할별 능력 버튼 초기화
             document.getElementById('roleActionContainer').style.display =
@@ -394,6 +416,7 @@
             }
           });
 
+<<<<<<< HEAD
           socket.on('NIGHT:BACKGROUND', function (data) {
             console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
             // 전체 배경은 검정색으로
@@ -411,24 +434,66 @@
           // VOTE:SECOND:END 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
           socket.on('VOTE:SECOND:END', function (data) {
             console.log('VOTE:SECOND:END 이벤트 수신:', data);
+=======
+          // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+          socket.on('VOTE:FIRST:TARGET:EFFECT', function (data) {
+            console.log('VOTE:FIRST:TARGET:EFFECT 이벤트 수신:', data);
+            var winnerBtn = document.querySelector(
+              `.occupant-btn[data-userid="${data.winnerId}"]`,
+            );
+            if (winnerBtn) {
+              winnerBtn.classList.add('blink');
+            }
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
+            document.getElementById('secondVoteContainer').style.display =
+              'block';
+          });
+
+          // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
+          socket.on('VOTE:SECOND:DEAD', function (data) {
+            console.log('VOTE:SECOND:DEAD 이벤트 수신:', data);
+>>>>>>> 9cb49deab60611725ab40fde850ce9d302300e97
             var targetId = data.targetId;
             var targetBtn = document.querySelector(
               `.occupant-btn[data-userid="${targetId}"]`,
             );
             if (targetBtn) {
-              targetBtn.classList.remove('blink');
+              targetBtn.classList.remove('blink'); // 깜빡임 제거
               targetBtn.classList.remove('btn-outline-primary');
               targetBtn.classList.add('btn-secondary');
               targetBtn.disabled = true;
             }
+            document.getElementById('secondVoteContainer').style.display =
+              'none';
+          });
+
+          // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거
+          socket.on('VOTE:SECOND:TIE', function (data) {
+            console.log('VOTE:SECOND:TIE 이벤트 수신:', data);
+            var targetId = data.targetId;
+            var targetBtn = document.querySelector(
+              `.occupant-btn[data-userid="${targetId}"]`,
+            );
+            if (targetBtn) {
+              targetBtn.classList.remove('blink'); // 깜빡임 제거
+              targetBtn.classList.remove('btn-outline-primary');
+            }
+            document.getElementById('secondVoteContainer').style.display =
+              'none';
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트
           document
             .getElementById('voteBtn')
             .addEventListener('click', function () {
+<<<<<<< HEAD
               if (!currentUserIsAlive) {
                 alert('죽은 사람은 투표를 할 수 없습니다.');
+=======
+              if (!isVotingPhase) {
+                alert('현재 투표가 진행되지 않는 시기입니다.');
+>>>>>>> 9cb49deab60611725ab40fde850ce9d302300e97
                 return;
               }
 
@@ -567,10 +632,84 @@
                     roomId: roomId,
                     players: [currentUserId], // 사망 처리할 플레이어 ID
                   });
+<<<<<<< HEAD
                   sender.isAlive = data.isAlive;
                   //currentUserIsAlive = false;
                 });
             }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
+=======
+                  clearSelection();
+                },
+              );
+            });
+
+          // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+          socket.on('VOTE:SURVIVAL', function (data) {
+            console.log('VOTE:SURVIVAL 이벤트 수신:', data);
+            var winnerBtn = document.querySelector(
+              `.occupant-btn[data-userid="${data.winnerId}"]`,
+            );
+            if (winnerBtn) {
+              winnerBtn.classList.add('blink');
+            }
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
+            document.getElementById('secondVoteContainer').style.display =
+              'block';
+          });
+
+          // 2차 투표: 사살 버튼 클릭 이벤트
+          document
+            .getElementById('executeBtn')
+            .addEventListener('click', function () {
+              var executeBtn = document.getElementById('executeBtn');
+              var survivalBtn = document.getElementById('survivalBtn');
+              executeBtn.disabled = true;
+              survivalBtn.disabled = true;
+              executeBtn.classList.add('disabled-btn');
+              survivalBtn.classList.add('disabled-btn');
+
+              socket.emit(
+                'VOTE:SECOND',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  execute: true,
+                },
+                function (response) {
+                  console.log('2차 투표 (사살) 응답:', response);
+                  document.getElementById('secondVoteContainer').style.display =
+                    'none';
+                },
+              );
+            });
+
+          // 2차 투표: 생존 버튼 클릭 이벤트
+          document
+            .getElementById('survivalBtn')
+            .addEventListener('click', function () {
+              var executeBtn = document.getElementById('executeBtn');
+              var survivalBtn = document.getElementById('survivalBtn');
+              executeBtn.disabled = true;
+              survivalBtn.disabled = true;
+              executeBtn.classList.add('disabled-btn');
+              survivalBtn.classList.add('disabled-btn');
+
+              socket.emit(
+                'VOTE:SECOND',
+                {
+                  roomId: roomId,
+                  voterId: currentUserId,
+                  execute: false,
+                },
+                function (response) {
+                  console.log('2차 투표 (생존) 응답:', response);
+                  document.getElementById('secondVoteContainer').style.display =
+                    'none';
+                },
+              );
+            });
+>>>>>>> 9cb49deab60611725ab40fde850ce9d302300e97
         });
       // 채팅 메시지 추가 함수
       function appendChatMessage(message, isRole) {

@@ -155,6 +155,9 @@ export class RoomService {
               sender: player,
             });
           }, 3000);
+          socket.emit('YOUR_ROLE', {
+            role: player.role,
+          });
         }
       });
 
@@ -167,6 +170,7 @@ export class RoomService {
         sender: 'system',
         message: `Day ${newDay} 낮이 밝았습니다!`,
       });
+      server.to(roomId).emit('VOTE:FIRST:ENABLE');
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }
