@@ -13,6 +13,8 @@ import { RoomService } from './room.service';
 import { BadRequestException } from '@nestjs/common';
 import { NightResultService } from 'src/notice/night-result.service';
 import { Inject, forwardRef } from '@nestjs/common';
+import { TimerService } from 'src/timer/timer.service';
+import { error } from 'console';
 
 export interface Player {
   id: number;
@@ -32,6 +34,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     private readonly gameService: GameService,
     @Inject(forwardRef(() => RoomService))
     private readonly roomService: RoomService,
+    private readonly timerService: TimerService,
     @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService,
   ) {}
@@ -254,38 +257,10 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
       console.log('handleFirstVote 결과:', result);
       if (!result.success) return;
-      if (!result.allVotesCompleted) return;
-
-      const finalResult = await this.gameService.calculateFirstVoteResult(
-        data.roomId,
-      );
-      console.log('투표 결과 계산 완료:', finalResult);
-
-      if (finalResult.tie) {
-        this.roomService.sendSystemMessage(
-          this.server,
-          data.roomId,
-          `투표 결과: 동률 발생 (${finalResult.tieCandidates.join(
-            ', ',
-          )} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
-        );
-        this.server.to(data.roomId).emit('NIGHT:PHASE', {
-          message: '동점으로 인해 밤 단계로 넘어갑니다.',
-        });
-        return;
+      if (result.allVotesCompleted) {
+        this.timerService.cancelTimer(data.roomId, 'day');
+        await this.finalizeFirstVote(data.roomId);
       }
-
-      // 동점이 아닌 경우, 최다 득표자를 targetId로 저장
-      await this.gameService.setTargetId(data.roomId, finalResult.winnerId!);
-      this.server.to(data.roomId).emit('VOTE:SURVIVAL', {
-        winnerId: finalResult.winnerId,
-        voteCount: finalResult.voteCount,
-      });
-      this.roomService.sendSystemMessage(
-        this.server,
-        data.roomId,
-        `투표 결과: 최다 득표자 ${finalResult.winnerId} (${finalResult.voteCount}표) → 생존 투표 진행.`,
-      );
     } catch (error) {
       console.error('handleFirstVote 에러 발생:', error);
       client.emit('voteError', '투표 처리 중 오류 발생.');
@@ -306,80 +281,13 @@ export class RoomGateway implements OnGatewayDisconnect {
         data.execute,
       );
       console.log('handleSecondVote 결과:', result);
-      if (!result.allVotesCompleted) return;
-
-      const finalResult = await this.gameService.calculateSecondVoteResult(
-        data.roomId,
-      );
-      console.log('투표 결과 계산 완료:', finalResult);
-
-      if (finalResult.tie) {
-        this.roomService.sendSystemMessage(
-          this.server,
-          data.roomId,
-          `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
-        );
-        this.gameService.startNightPhase(data.roomId);
-        this.server.to(data.roomId).emit('NIGHT:PHASE', {
-          message: '생존투표 동률, 밤 단계 시작',
-        });
-        return;
+      if (result.allVotesCompleted) {
+        this.timerService.cancelTimer(data.roomId, 'secondVoteTimer');
+        await this.finalizeSecondVote(data.roomId);
       }
-
-      this.roomService.sendSystemMessage(
-        this.server,
-        data.roomId,
-        `투표 결과: ${finalResult.execute ? '사형' : '생존'} - (${finalResult.voteCount}표), 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
-      );
-
-      //  gameId 조회 추가 (오류 수정)
-      const gameId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!gameId) {
-        throw new BadRequestException(
-          '현재 진행 중인 게임이 존재하지 않습니다.',
-        );
-      }
-
-      //  사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
-      const targetId = await this.gameService.getTargetId(data.roomId);
-      if (targetId !== null && finalResult.execute) {
-        console.log(`사형 결정 - 플레이어 ${targetId}를 제거합니다.`);
-
-        //  플레이어 사망 처리
-        await this.gameService.killPlayers(data.roomId, [targetId]);
-
-        //  사망자 확인을 위해 gameId 추가하여 getDead 호출 (오류 수정)
-        const deadPlayers = await this.gameService.getDead(data.roomId, gameId);
-        console.log(`현재 사망자 목록:`, deadPlayers);
-
-        this.roomService.sendSystemMessage(
-          this.server,
-          data.roomId,
-          `플레이어 ${targetId}가 사망 처리되었습니다.`,
-        );
-
-        this.server.to(data.roomId).emit('VOTE:SECOND:DEAD', {
-          targetId,
-        });
-      }
-
-      //  게임 종료 체크
-      const endCheck = await this.gameService.checkEndGame(data.roomId);
-      if (endCheck.isGameOver) {
-        const gameEndResult = await this.gameService.endGame(data.roomId);
-        this.server.to(data.roomId).emit('gameEnd', gameEndResult);
-        return;
-      }
-
-      //  밤 페이즈로 이동
-      this.server.to(data.roomId).emit('NIGHT:PHASE', {
-        message: '밤이 찾아옵니다.',
-      });
-
-      console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
-    } catch (error: any) {
-      console.error('VOTE:SECOND 처리 중 오류:', error);
-      client.emit('voteError', { message: error.message });
+    } catch (error) {
+      console.error('handleSecondVote 에러 발생:', error);
+      client.emit('voteError', '투표 처리 중 오류 발생.');
     }
   }
 
@@ -395,6 +303,154 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     const payload = { roomId, message, ...additionalData };
     this.server.to(roomId).emit(event, payload);
+  }
+  //CHAN 임시 로직 수정
+  async announceFirstVoteStart(
+    roomId: string,
+    dayNumber: number,
+  ): Promise<void> {
+    this.nightResultService.announceFirstVoteStart(roomId, dayNumber);
+
+    // 15초 후 자동으로 투표 마감
+    this.timerService
+      .startTimer(roomId, 'firstVoteTimer', 15000)
+      .subscribe(async () => {
+        console.log('1차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
+        await this.finalizeFirstVote(roomId);
+      });
+  }
+
+  private async finalizeFirstVote(roomId: string) {
+    try {
+      //CHAN 데이 얻을 방법 이것밖에 없나?
+      const gameId = await this.gameService.getCurrentGameId(roomId);
+      const gameData = await this.gameService.getGameData(
+        roomId,
+        String(gameId),
+      );
+      let currentDay = parseInt(gameData.day, 10) || 0;
+      const finalResult =
+        await this.gameService.calculateFirstVoteResult(roomId);
+      console.log('투표 결과 계산 완료:', finalResult);
+
+      if (finalResult.tie) {
+        this.roomService.sendSystemMessage(
+          this.server,
+          roomId,
+          `투표 결과: 동률 발생 (${finalResult.tieCandidates.join(', ')} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
+        );
+        this.gameService.startNightPhase(roomId);
+        this.server.to(roomId).emit('NIGHT:PHASE', {
+          message: '동점으로 인해 밤 단계로 넘어갑니다.',
+        });
+        return;
+      }
+
+      // 최다 득표자를 targetId로 저장
+      await this.gameService.setTargetId(roomId, finalResult.winnerId!);
+      this.server.to(roomId).emit('VOTE:SURVIVAL', {
+        winnerId: finalResult.winnerId,
+        voteCount: finalResult.voteCount,
+      });
+      this.roomService.sendSystemMessage(
+        this.server,
+        roomId,
+        `투표 결과: 최다 득표자 ${finalResult.winnerId} (${finalResult.voteCount}표) → 생존 투표 진행.`,
+      );
+      this.announceSecondVoteStart(roomId, currentDay);
+    } catch (error) {
+      console.error('finalizeFirstVote 오류 발생:', error);
+    }
+  }
+
+  async announceSecondVoteStart(
+    roomId: string,
+    dayNumber: number,
+  ): Promise<void> {
+    this.nightResultService.announceSecondVoteStart(roomId, dayNumber);
+
+    // 45초 후 자동으로 투표 마감
+    this.timerService
+      .startTimer(roomId, 'secondVoteTimer', 45000)
+      .subscribe(async () => {
+        console.log('2차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
+        await this.finalizeSecondVote(roomId);
+      });
+  }
+
+  private async finalizeSecondVote(roomId: string) {
+    try {
+      const finalResult =
+        await this.gameService.calculateSecondVoteResult(roomId);
+      console.log('투표 결과 계산 완료:', finalResult);
+
+      if (finalResult.tie) {
+        this.roomService.sendSystemMessage(
+          this.server,
+          roomId,
+          `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
+        );
+        this.gameService.startNightPhase(roomId);
+        this.server.to(roomId).emit('NIGHT:PHASE', {
+          message: '생존투표 동률, 밤 단계 시작',
+        });
+        return;
+      }
+
+      this.roomService.sendSystemMessage(
+        this.server,
+        roomId,
+        `투표 결과: ${finalResult.execute ? '사형' : '생존'} - (${finalResult.voteCount}표), 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
+      );
+
+      //  gameId 조회 추가 (오류 수정)
+      const gameId = await this.gameService.getCurrentGameId(roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
+      //  사형이 결정되면 저장된 targetId를 조회하여 해당 플레이어를 사망 처리
+      const targetId = await this.gameService.getTargetId(roomId);
+      if (targetId !== null && finalResult.execute) {
+        console.log(`사형 결정 - 플레이어 ${targetId}를 제거합니다.`);
+
+        //  플레이어 사망 처리
+        await this.gameService.killPlayers(roomId, [targetId]);
+
+        //  사망자 확인을 위해 gameId 추가하여 getDead 호출 (오류 수정)
+        const deadPlayers = await this.gameService.getDead(roomId, gameId);
+        console.log(`현재 사망자 목록:`, deadPlayers);
+
+        this.roomService.sendSystemMessage(
+          this.server,
+          roomId,
+          `플레이어 ${targetId}가 사망 처리되었습니다.`,
+        );
+        // 이부분 받는게 있나??
+        this.server.to(roomId).emit('VOTE:SECOND:DEAD', {
+          targetId,
+        });
+      }
+
+      //  게임 종료 체크
+      const endCheck = await this.gameService.checkEndGame(roomId);
+      if (endCheck.isGameOver) {
+        const gameEndResult = await this.gameService.endGame(roomId);
+        this.server.to(roomId).emit('gameEnd', gameEndResult);
+        return;
+      }
+
+      //  밤 페이즈로 이동
+      this.server.to(roomId).emit('NIGHT:PHASE', {
+        message: '밤이 찾아옵니다.',
+      });
+
+      console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
+    } catch (error) {
+      console.error('finalizeFirstVote 오류 발생:', error);
+    }
   }
 
   @SubscribeMessage('endGame')
