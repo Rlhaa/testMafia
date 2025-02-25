@@ -431,6 +431,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
 
       //  밤 페이즈로 이동
+      this.gameService.startNightPhase(roomId);
       this.server.to(roomId).emit('NIGHT:PHASE', {
         message: '밤이 찾아옵니다.',
       });
