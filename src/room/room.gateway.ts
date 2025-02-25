@@ -255,7 +255,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 2차 투표 처리: 투표 진행 → 결과 계산 → (사형 결정 시) targetId 조회 후 해당 플레이어 사망 처리
+  // 2차 투표 처리: 투표 진행 → 결과 계산 → (사형 결정 시) targetId 조회 후 해당 플레이어 사망
   @SubscribeMessage('VOTE:SECOND')
   async handleSecondVote(
     @MessageBody() data: { roomId: string; voterId: number; execute: boolean },
