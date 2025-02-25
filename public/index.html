@@ -378,6 +378,7 @@
           });
 
           // 밤 시작 신호 수신 시 역할 버튼 표시
+          //여기 이름 달라야하는 거 같은데
           socket.on('NIGHT:START:SIGNAL', function (data) {
             console.log('🌙 NIGHT:START:SIGNAL 이벤트 수신:', data);
 
@@ -815,23 +816,20 @@
         document.getElementById('mafiaActionBtn').style.display = 'none';
         document.getElementById('policeActionBtn').style.display = 'none';
         document.getElementById('doctorActionBtn').style.display = 'none';
-        console.log(
-          'showRoleActionContainer, currentUserRole:',
-          currentUserRole,
-        );
-        if (currentUserRole === 'mafia') {
+        console.log('showRoleActionContainer, currentUserRole:', sender.role);
+        if (sender.role === 'mafia') {
           document.getElementById('mafiaActionBtn').style.display = 'block';
           appendChatMessage(
             '[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.',
             true,
           );
-        } else if (currentUserRole === 'police') {
+        } else if (sender.role === 'police') {
           document.getElementById('policeActionBtn').style.display = 'block';
           appendChatMessage(
             '[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.',
             true,
           );
-        } else if (currentUserRole === 'doctor') {
+        } else if (sender.role === 'doctor') {
           document.getElementById('doctorActionBtn').style.display = 'block';
           appendChatMessage(
             '[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.',
