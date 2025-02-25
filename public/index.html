@@ -182,7 +182,7 @@
             <div id="occupantList"></div>
         </div>
     </div>
-    <!-- 투표 확정 버튼 -->
+    <!-- 투표 확정 버튼 컨테이너 (기본적으로 숨김) -->
     <div id="firstVoteContainer" style="display: none; margin-top: 10px;">
         <button id="voteBtn" class="btn btn-success">투표 확정</button>
         <p id="voteStatus"></p>
@@ -203,6 +203,7 @@
         var roomId = pathSegments[pathSegments.length - 1];
         document.getElementById('roomTitle').textContent = "채팅룸 (룸 " + roomId + ")";
 
+        var isVotingPhase = false;
         var currentUserId;
         var socket;
         var roomInfo;
@@ -222,10 +223,9 @@
                 auth: { roomId: roomId, userId: currentUserId }
             });
 
-            // UI 표시
+            // UI 표시 (여기서는 1차 투표 버튼 컨테이너는 숨긴 상태로 유지)
             document.getElementById("mainContainer").style.display = "flex";
             document.getElementById("gameSection").style.display = "block";
-            document.getElementById("firstVoteContainer").style.display = "block";
 
             socket.emit("joinRoom", { roomId: roomId, userId: currentUserId });
             socket.emit("requestRoomInfo", { roomId: roomId });
@@ -267,25 +267,39 @@
                 if (occupantContainer) occupantContainer.style.backgroundColor = "#e0e0e0";
             });
 
-            // VOTE:SECOND:END 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
-            socket.on("VOTE:SECOND:END", function (data) {
-                console.log("VOTE:SECOND:END 이벤트 수신:", data);
+            // 서버로부터 1차 투표 버튼 보이라는 이벤트 수신 시 처리
+            socket.on("VOTE:FIRST:ENABLE", function (data) {
+                isVotingPhase = true;
+                document.getElementById("firstVoteContainer").style.display = "block";
+            });
+
+            // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
+            socket.on("VOTE:SECOND:DEAD", function (data) {
+                console.log("VOTE:SECOND:DEAD 이벤트 수신:", data);
                 var targetId = data.targetId;
                 var targetBtn = document.querySelector(`.occupant-btn[data-userid="${targetId}"]`);
                 if (targetBtn) {
-                    targetBtn.classList.remove("blink");
+                    targetBtn.classList.remove("blink"); // 깜빡임 제거
                     targetBtn.classList.remove("btn-outline-primary");
                     targetBtn.classList.add("btn-secondary");
                     targetBtn.disabled = true;
                 }
+                document.getElementById("secondVoteContainer").style.display = "none";
             });
 
             // 1차 투표 확정 버튼 클릭 이벤트
             document.getElementById("voteBtn").addEventListener("click", function () {
+                // 1차 투표 시기가 아니면 클릭 무시
+                if (!isVotingPhase) {
+                    alert("현재 투표가 진행되지 않는 시기입니다.");
+                    return;
+                }
+
                 if (!selectedTargetId) {
                     alert("투표할 대상을 선택하세요.");
                     return;
                 }
+
                 var voteBtn = document.getElementById("voteBtn");
                 voteBtn.disabled = true;
                 voteBtn.classList.add("disabled-btn");
