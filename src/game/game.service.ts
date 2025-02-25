@@ -75,6 +75,28 @@ export class GameService {
     return gameData;
   }
 
+  //채팅 수신자: 마피아
+  async getMafias(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 마피아인 플레이어만 필터링합니다.
+    const mafias = players.filter((player) => player.role === 'mafia');
+
+    return mafias;
+  }
+
+  //채팅 수신자: 시체
+  async getDead(roomId: string, gameId: string) {
+    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
+    const players: Player[] = gameData.players;
+
+    // 죽은 사람을 검색
+    const dead = players.filter((player) => player.isAlive === false);
+
+    return dead;
+  }
+
   // ──────────────────────────────
   // 게임 초기화 및 상태 관리 메서드
   // ──────────────────────────────
@@ -149,9 +171,6 @@ export class GameService {
       'doctor',
     ];
     rolesPool.sort(() => Math.random() - 0.5); // 역할 풀 무작위 순서로 섞기
-
-    const alivetest = [false, false, false, true, true, true, true, true];
-    alivetest.sort(() => Math.random() - 0.5);
 
     const updatedPlayers = players.map((player, index) => ({
       ...player,
@@ -477,28 +496,6 @@ export class GameService {
   // ──────────────────────────────
   // (필요시) 게임 종료 관련 메서드
   // ──────────────────────────────
-
-  //수신자: 마피아
-  async getMafias(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 마피아인 플레이어만 필터링합니다.
-    const mafias = players.filter((player) => player.role === 'mafia');
-
-    return mafias;
-  }
-
-  //수신자: 시체
-  async getDead(roomId: string, gameId: string) {
-    const gameData = await this.getGameData(roomId, gameId); // 게임 데이터 조회
-    const players: Player[] = gameData.players;
-
-    // 죽은 사람을 검색
-    const dead = players.filter((player) => player.isAlive === false);
-
-    return dead;
-  }
 
   // async endGame(roomId: string): Promise<void> {
   //   const gameId = await this.getCurrentGameId(roomId);

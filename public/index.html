@@ -263,9 +263,11 @@
 
           // UI 표시
           document.getElementById('mainContainer').style.display = 'flex';
-          //document.getElementById('gameSection').style.display = 'block';
-          //document.getElementById('firstVoteContainer').style.display = 'block';
+          document
+            .getElementById('sendBtn')
+            .addEventListener('click', sendChatMessage);
 
+          // 대응 이벤트
           socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
           socket.emit('requestRoomInfo', { roomId: roomId });
 
@@ -297,12 +299,7 @@
             appendChatMessage(`[공지] ${data.message}`, true);
           });
 
-          document
-            .getElementById('sendBtn')
-            .addEventListener('click', sendChatMessage);
-
           socket.on('YOUR_ROLE', function (data) {
-            //currentUserRole = data.role;
             sender = data.sender;
             appendChatMessage(data.message, true);
           });
@@ -319,15 +316,15 @@
           });
 
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
-          socket.on('gameEnd', function (data) {
+          socket.on('endGame', function (data) {
             // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
             appendChatMessage('게임 종료: ' + data.message);
             document.getElementById('gameStatus').textContent = data.message;
             console.log('게임 종료 데이터:', data);
           });
 
-          socket.on('NIGHT:START', function (data) {
-            console.log('NIGHT:START 이벤트 수신:', data);
+          socket.on('ROOM:NIGHT_START', function (data) {
+            console.log('ROOM:NIGHT_START 이벤트 수신:', data);
 
             // 메시지를 채팅창에 출력
             appendChatMessage(`[SYSTEM] ${data.message}`, true);
@@ -356,6 +353,10 @@
             document.getElementById('mafiaActionBtn').style.display = 'none';
             document.getElementById('policeActionBtn').style.display = 'none';
             document.getElementById('doctorActionBtn').style.display = 'none';
+
+            //발신자 정보 갱신
+            sender = data.sender;
+            console.log('----------', sender);
 
             // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
             if (sender.role === 'mafia') {
@@ -429,7 +430,6 @@
               targetBtn.classList.add('btn-secondary');
               targetBtn.disabled = true;
             }
-            //sender.isAlive 지정 필요
             document.getElementById('secondVoteContainer').style.display =
               'none';
           });

@@ -175,7 +175,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  //테스트용 임시로 페이즈 변경하는 버튼에 대응하는 게이트웨이
+  //페이즈 전환
   @SubscribeMessage('SET_PHASE')
   async handleSetPhase(
     @MessageBody() data: { roomId: string; phase: string },
@@ -481,17 +481,19 @@ export class RoomGateway implements OnGatewayDisconnect {
   }
 
   // 1. 밤 시작 이벤트 처리
-  @SubscribeMessage('START:NIGHT')
+  @SubscribeMessage('ROOM:NIGHT_START')
   async handleNightStart(
-    @MessageBody() data: { roomId: string },
+    @MessageBody() data: { roomId: string; userId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
       const nightNumber = await this.gameService.startNightPhase(data.roomId);
+      const sender = await this.getSpeakerInfo(data.roomId, data.userId);
       this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
         roomId: data.roomId,
         nightNumber,
         message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
+        sender: sender,
       });
     } catch (error) {
       client.emit('error', { message: '밤 시작 처리 중 오류 발생.' });
