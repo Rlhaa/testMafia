@@ -40,20 +40,8 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {}
 
   // ──────────────────────────────
-  // 기본 이벤트 핸들러 (채팅, 입장, 퇴장, 연결 종료)
+  // 게임 정보 받아오기 (게임 아이디, 데이터, 발신자 정보)
   // ──────────────────────────────
-
-  @SubscribeMessage('chatMessage')
-  handleChatMessage(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
-    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
-      sender: data.userId,
-      message: data.message,
-    });
-  }
 
   //방 아이디로 게임 아이디 받아오기
   async getCurrentGameId(roomId: string) {
@@ -84,6 +72,22 @@ export class RoomGateway implements OnGatewayDisconnect {
     return sender;
   }
 
+  // ──────────────────────────────
+  // 기본 이벤트 핸들러 (채팅, 입장, 퇴장, 연결 종료)
+  // ──────────────────────────────
+
+  @SubscribeMessage('chatMessage')
+  handleChatMessage(
+    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
+    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
+      sender: data.userId,
+      message: data.message,
+    });
+  }
+
   @SubscribeMessage('chatDead')
   async handleChatDead(
     @MessageBody() data: { roomId: string; userId: number; message: string },
@@ -91,16 +95,13 @@ export class RoomGateway implements OnGatewayDisconnect {
   ): Promise<void> {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.getCurrentGameId(data.roomId);
+      const gameId = await this.getCurrentGameId(data.roomId);
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
       const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 죽은 플레이어들만 필터링합니다.
-      const deadPlayers = await this.gameService.getDead(
-        data.roomId,
-        currentGId,
-      );
+      const deadPlayers = await this.gameService.getDead(data.roomId, gameId);
       let messageSentToDeadPlayers = false;
 
       deadPlayers.forEach((deadPlayer) => {
@@ -139,14 +140,14 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       // 방의 플레이어 정보를 가져옵니다.
-      const currentGId = await this.getCurrentGameId(data.roomId);
-      const gameData = await this.getGameData(data.roomId, currentGId);
+      const gameId = await this.getCurrentGameId(data.roomId);
+      const gameData = await this.getGameData(data.roomId, gameId);
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
       const sender = await this.getSpeakerInfo(data.roomId, data.userId);
 
       // 마피아인 플레이어만 필터링합니다.
-      const mafias = await this.gameService.getMafias(data.roomId, currentGId);
+      const mafias = await this.gameService.getMafias(data.roomId, gameId);
       let messageSentToMafias = false;
 
       // 마피아 플레이어에게만 메시지를 브로드캐스트합니다.
@@ -181,8 +182,8 @@ export class RoomGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
     // 방의 플레이어 정보를 가져옵니다.
-    const currentGId = await this.gameService.getCurrentGameId(data.roomId);
-    if (!currentGId) {
+    const gameId = await this.gameService.getCurrentGameId(data.roomId);
+    if (!gameId) {
       throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
     }
 
