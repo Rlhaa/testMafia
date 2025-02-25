@@ -39,7 +39,7 @@ export class TimerService {
       takeUntil(stop$),
       map(() => {
         this.stopSubjects.delete(key); // 타이머 완료 후 삭제
-        this.logger.log(`Timer expired for ${key}`);
+        this.logger.log(`Timer expired for room ${key}`);
       }),
     ); // stop$이 방출되면 타이머 취소
   }
@@ -56,9 +56,9 @@ export class TimerService {
       stop$.next(); // 타이머 스트림 종료
       stop$.complete();
       this.stopSubjects.delete(key);
-      this.logger.log(`Timer canceled for ${key}`);
+      this.logger.log(`Timer canceled for room ${key}`);
     } else {
-      this.logger.warn(`No timer found for ${key}`);
+      this.logger.warn(`No timer found for room ${key}`);
     }
   }
   hasTimer(roomId: string, phase: string): boolean {

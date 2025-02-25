@@ -9,6 +9,7 @@ import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { TimerService } from 'src/timer/timer.service';
 import { NightResultService } from 'src/notice/night-result.service';
+import { RoomGateway } from 'src/room/room.gateway';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -35,7 +36,8 @@ export class GameService {
     private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
     private readonly timerService: TimerService, // 타이머 테스트용
     @Inject(forwardRef(() => NightResultService))
-    private readonly nightResultService: NightResultService, //
+    private readonly nightResultService: NightResultService,
+    private readonly roomGateway: RoomGateway,
   ) {}
 
   // ──────────────────────────────
@@ -179,7 +181,7 @@ export class GameService {
     await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
 
     this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
-      this.nightResultService.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
+      this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
 
     return currentDay;
@@ -593,8 +595,6 @@ export class GameService {
     }
     const redisKey = `room:${roomId}:game:${gameId}`;
 
-    console.log(`방 ${roomId} - 밤으로 전환됨.`);
-
     // 현재 게임 데이터를 가져올 필요가 있는 경우만 가져오기
     let currentDay = 0;
 
@@ -603,6 +603,7 @@ export class GameService {
 
     // 게임의 phase를 `night`로 설정
     await this.redisClient.hset(redisKey, 'phase', 'night');
+    console.log(`방 ${roomId} - 밤으로 전환됨.`);
 
     // 밤 횟수 관리 (nightNumber 증가)
     const nightNumber = await this.getNightCount(roomId);

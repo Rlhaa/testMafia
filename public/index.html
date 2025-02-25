@@ -324,8 +324,8 @@
             console.log('게임 종료 데이터:', data);
           });
 
-          socket.on('NIGHT:START', function (data) {
-            console.log('NIGHT:START 이벤트 수신:', data);
+          socket.on('NIGHT:PHASE', function (data) {
+            console.log('NIGHT:PHASE 이벤트 수신:', data);
 
             // 메시지를 채팅창에 출력
             appendChatMessage(`[SYSTEM] ${data.message}`, true);
