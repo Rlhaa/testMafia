@@ -240,7 +240,7 @@
 
       var isVotingPhase = false;
       var currentUserId;
-      var sender;
+      var sender; // 발신자 정보
       var socket; // 단일 소켓
       var roomInfo; // 최신 방 정보
       var selectedTargetId = null; // 1차 투표 시 선택된 대상의 ID
@@ -309,20 +309,6 @@
 
           socket.on('error', function (data) {
             alert('게임 에러: ' + data.message);
-          });
-
-          socket.on('NIGHT:BACKGROUND', function (data) {
-            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
-            // 전체 배경은 검정색으로
-            document.body.style.backgroundColor = 'black';
-            // div 배경은 순수 흰색 대신 연한 회색으로 변경
-            var chatContainer = document.querySelector('.chat-container');
-            var occupantContainer = document.querySelector(
-              '.occupant-container',
-            );
-            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
-            if (occupantContainer)
-              occupantContainer.style.backgroundColor = '#e0e0e0';
           });
 
           // 서버로부터 1차 투표 버튼 보이라는 이벤트 수신 시 처리
@@ -522,20 +508,6 @@
                 document.getElementById('secondVoteContainer').style.display =
                   'block';
               });
-              // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-              socket.on('VOTE:SURVIVAL', function (data) {
-                console.log('VOTE:SURVIVAL 이벤트 수신:', data);
-                var winnerBtn = document.querySelector(
-                  `.occupant-btn[data-userid="${data.winnerId}"]`,
-                );
-                if (winnerBtn) {
-                  winnerBtn.classList.add('blink');
-                }
-                document.getElementById('firstVoteContainer').style.display =
-                  'none';
-                document.getElementById('secondVoteContainer').style.display =
-                  'block';
-              });
 
               // 2차 투표: 사살 버튼 클릭 이벤트
               document
@@ -563,13 +535,6 @@
                     },
                   );
                 });
-              // 게임 단계 전환 버튼 클릭 이벤트
-              document
-                .getElementById('setNightPhaseBtn')
-                .addEventListener('click', function () {
-                  socket.emit('SET_PHASE', { roomId: roomId, phase: 'night' });
-                }); ////2.21 18시: 여기로 괄호를 옮겨서 버튼 구분
-
               // 2차 투표: 생존 버튼 클릭 이벤트
               document
                 .getElementById('survivalBtn')
