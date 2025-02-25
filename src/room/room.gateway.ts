@@ -343,9 +343,10 @@ export class RoomGateway implements OnGatewayDisconnect {
           `투표 결과: 동률 발생 (${finalResult.tieCandidates.join(', ')} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
         );
         this.gameService.startNightPhase(roomId);
-        this.server.to(roomId).emit('NIGHT:PHASE', {
-          message: '동점으로 인해 밤 단계로 넘어갑니다.',
+        this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
+          message: '투표 결과 동률로, 밤 단계 시작',
         });
+
         return;
       }
 
@@ -398,8 +399,8 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_TIE, {
           targetId,
         });
-        this.server.to(roomId).emit(RoomEvents.NIGHT_PHASE, {
-          message: '생존투표 동률, 밤 단계 시작',
+        this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
+          message: '생존 투표 결과 동률로, 밤 단계 시작',
         });
         return;
       }
@@ -449,10 +450,6 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
 
       //  밤 페이즈로 이동
-      this.gameService.startNightPhase(roomId);
-      this.server.to(roomId).emit('NIGHT:PHASE', {
-        message: '밤이 찾아옵니다.',
-      });
       this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
         targetId,
       });
@@ -461,6 +458,10 @@ export class RoomGateway implements OnGatewayDisconnect {
         message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
       });
 
+      this.gameService.startNightPhase(roomId);
+      this.server.to(roomId).emit('NIGHT:PHASE', {
+        message: '밤이 찾아옵니다.',
+      });
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
     } catch (error) {
       console.error('finalizeFirstVote 오류 발생:', error);
