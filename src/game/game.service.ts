@@ -580,20 +580,20 @@ export class GameService {
   // 2. NIGHT 시작 - 게임 상태 변경
   async startNightPhase(
     roomId: string,
+    gameId?: string,
   ): Promise<{ nightNumber: number; mafias: Player[]; dead: Player[] }> {
-    const gameId = await this.getCurrentGameId(roomId);
-    if (!gameId) {
-      throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
-    }
-    const redisKey = `room:${roomId}:game:${gameId}`;
+    const redisKey = gameId
+      ? `room:${roomId}:game:${gameId}`
+      : `room:${roomId}:game`;
 
     console.log(`방 ${roomId} - 밤으로 전환됨.`);
 
     // 현재 게임 데이터를 가져올 필요가 있는 경우만 가져오기
     let currentDay = 0;
-
-    const gameData = await this.getGameData(roomId, gameId);
-    currentDay = parseInt(gameData.day, 10) || 0;
+    if (gameId) {
+      const gameData = await this.getGameData(roomId, gameId);
+      currentDay = parseInt(gameData.day, 10) || 0;
+    }
 
     // 게임의 phase를 `night`로 설정
     await this.redisClient.hset(redisKey, 'phase', 'night');
