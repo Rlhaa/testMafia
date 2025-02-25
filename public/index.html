@@ -209,15 +209,7 @@
       <button id="executeBtn" class="btn btn-danger">사살</button>
       <button id="survivalBtn" class="btn btn-info">생존</button>
     </div>
-    <!-- 게임 상태 영역 -->
-    <div id="gameSection" style="display: none; margin-top: 20px">
-      <h2>게임 상태</h2>
-      <div id="gameStatus"></div>
-      <!-- 테스트용 버튼 추가 삭제예정 -->
-      <button id="setNightPhaseBtn" class="btn btn-warning mt-2">
-        게임 단계: 밤으로 전환
-      </button>
-    </div>
+
     <!-- 역할별 능력 버튼 컨테이너 -->
     <div id="roleActionContainer" style="display: none; margin-top: 10px">
       <button id="mafiaActionBtn" class="btn btn-danger" style="display: none">
@@ -271,7 +263,7 @@
 
           // UI 표시
           document.getElementById('mainContainer').style.display = 'flex';
-          document.getElementById('gameSection').style.display = 'block';
+          // document.getElementById('gameSection').style.display = 'block';
           //document.getElementById('firstVoteContainer').style.display = 'block';
 
           socket.emit('joinRoom', { roomId: roomId, userId: currentUserId });
