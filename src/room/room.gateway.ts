@@ -450,6 +450,8 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit('VOTE:SECOND:DEAD', {
           targetId,
         });
+        this.server.to(roomId).emit('NIGHT:START:SIGNAL');
+        console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
       }
 
       //  게임 종료 체크
@@ -459,7 +461,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit('gameEnd', gameEndResult);
         return;
       }
-      // CHAND 밤 페이즈 붙여두
+      // CHAND 밤 페이즈 붙여둘 이유가 있나?
       //  밤 페이즈로 이동
       this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
         targetId,
