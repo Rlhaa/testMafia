@@ -78,4 +78,60 @@ export enum RoomEvents {
    * client.emit(RoomEvents.VOTE_ERROR, { message: '투표 처리 에러' });
    */
   VOTE_ERROR = 'voteError',
+
+  /**
+   * 밤 단계 시작 신호 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.NIGHT_START_SIGNAL);
+   */
+  NIGHT_START_SIGNAL = 'NIGHT:START:SIGNAL',
+
+  /**
+   * 밤 단계 시작 알림 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.ROOM_NIGHT_START, { roomId, nightNumber, message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.' });
+   */
+  ROOM_NIGHT_START = 'ROOM:NIGHT_START',
+
+  /**
+   * 마피아가 타겟을 선택했을 때 발생하는 이벤트.
+   * @example
+   * server.to(data.roomId).emit(RoomEvents.ACTION_MAFIA_TARGET, { message: '마피아 대상 선택 완료' });
+   */
+  ACTION_MAFIA_TARGET = 'ACTION:MAFIA_TARGET',
+
+  /**
+   * 경찰이 조사 대상을 선택했을 때 발생하는 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.ACTION_POLICE_TARGET, { message: '경찰 조사 완료' });
+   */
+  ACTION_POLICE_TARGET = 'ACTION:POLICE:TARGET',
+
+  /**
+   * 의사가 보호 대상을 선택했을 때 발생하는 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.ACTION_DOCTOR_TARGET, { message: '의사 보호 완료' });
+   */
+  ACTION_DOCTOR_TARGET = 'ACTION:DOCTOR:TARGET',
+
+  /**
+   * 경찰 조사 결과를 전달하는 이벤트.
+   * @example
+   * client.emit(RoomEvents.POLICE_RESULT, { roomId, targetUserId, role });
+   */
+  POLICE_RESULT = 'POLICE:RESULT',
+
+  /**
+   * 밤 결과 발표 이벤트.
+   * @example
+   * server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_RESULT, { roomId, result, message: `밤 결과: ${result.details}` });
+   */
+  ROOM_NIGHT_RESULT = 'ROOM:NIGHT_RESULT',
+
+  /**
+   * 게임 종료 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.GAME_END, gameEndResult);
+   */
+  GAME_END = 'gameEnd',
 }

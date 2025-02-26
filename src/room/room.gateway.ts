@@ -450,7 +450,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit('VOTE:SECOND:DEAD', {
           targetId,
         });
-        this.server.to(roomId).emit('NIGHT:START:SIGNAL');
+        this.server.to(roomId).emit(RoomEvents.NIGHT_START_SIGNAL);
         console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
       }
 
@@ -458,7 +458,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       const endCheck = await this.gameService.checkEndGame(roomId);
       if (endCheck.isGameOver) {
         const gameEndResult = await this.gameService.endGame(roomId);
-        this.server.to(roomId).emit('gameEnd', gameEndResult);
+        this.server.to(roomId).emit(RoomEvents.GAME_END, gameEndResult);
         return;
       }
       // CHAND 밤 페이즈 붙여둘 이유가 있나?
@@ -475,7 +475,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       console.log(`🌙 NIGHT:START 이벤트 실행 - 방 ${roomId}`);
       const nightResult = await this.gameService.startNightPhase(roomId);
 
-      this.server.to(roomId).emit('ROOM:NIGHT_START', {
+      this.server.to(roomId).emit(RoomEvents.ROOM_NIGHT_START, {
         roomId: roomId,
         nightNumber: nightResult.nightNumber,
         message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
@@ -494,7 +494,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       const result = await this.gameService.endGame(data.roomId);
-      this.server.to(data.roomId).emit('gameEnd', result);
+      this.server.to(data.roomId).emit(RoomEvents.GAME_END, result);
     } catch (error) {
       client.emit('error', { message: '게임 종료 처리 중 오류 발생.' });
     }
@@ -517,7 +517,7 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       console.log(`🔥 [마피아] 대상 선택 완료: ${data.targetUserId}`);
 
-      this.server.to(data.roomId).emit('ACTION:MAFIA_TARGET', {
+      this.server.to(data.roomId).emit(RoomEvents.ACTION_MAFIA_TARGET, {
         message: '마피아 대상 선택 완료',
       });
 
@@ -547,9 +547,9 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       console.log(`🔍 [경찰] 조사 대상 선택 완료: ${data.targetUserId}`);
 
-      this.server
-        .to(data.roomId)
-        .emit('ACTION:POLICE_TARGET', { message: '경찰 조사 완료' });
+      this.server.to(data.roomId).emit(RoomEvents.ACTION_POLICE_TARGET, {
+        message: '경찰 조사 완료',
+      });
 
       // ✅ 밤 행동 완료 체크 후 처리
       const allCompleted = await this.gameService.checkAllNightActionsCompleted(
@@ -577,9 +577,9 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       console.log(`💊 [의사] 보호 대상 선택 완료: ${data.targetUserId}`);
 
-      this.server
-        .to(data.roomId)
-        .emit('ACTION:DOCTOR_TARGET', { message: '의사 보호 완료' });
+      this.server.to(data.roomId).emit(RoomEvents.ACTION_DOCTOR_TARGET, {
+        message: '의사 보호 완료',
+      });
 
       // ✅ 밤 행동 완료 체크 후 처리
       const allCompleted = await this.gameService.checkAllNightActionsCompleted(
@@ -617,7 +617,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         return;
       }
 
-      client.emit('POLICE:RESULT', {
+      client.emit(RoomEvents.POLICE_RESULT, {
         roomId: data.roomId,
         targetUserId: result.targetUserId,
         role: result.role,
@@ -650,7 +650,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       await this.gameService.setNightResultProcessed(data.roomId);
 
       // ✅ 밤 결과 브로드캐스트 (1번만 실행)
-      this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
+      this.server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_RESULT, {
         roomId: data.roomId,
         result,
         message: `🌙 밤 결과: ${result.details}`,
@@ -662,7 +662,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       if (endCheck.isGameOver) {
         console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
         const endResult = await this.gameService.endGame(data.roomId);
-        this.server.to(data.roomId).emit('gameEnd', endResult);
+        this.server.to(data.roomId).emit(RoomEvents.GAME_END, endResult);
         return; // 게임이 끝났으므로 더 이상 낮 단계로 이동하지 않음
       }
 
