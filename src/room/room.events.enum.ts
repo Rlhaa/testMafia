@@ -163,4 +163,10 @@ export enum RoomEvents {
    */
   ROOM_NIGHT_RESULT = 'ROOM:NIGHT_RESULT',
   
+  /**
+   * 시민, 경찰, 의사는 낮에 채팅을 못하게 알리는 이벤트.
+   * @example
+   * this.server.to(String(you)).emit('NOT:CHAT')
+   */
+  NOT_CHAT = 'NOT:CHAT',
 }

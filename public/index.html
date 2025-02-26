@@ -410,6 +410,11 @@
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
 
+          socket.on('NOT:CHAT', function() {
+            alert("밤에는 마피아만 대화할 수 있습니다.")
+            return
+          });
+
           socket.on('CHAT:DEAD', function (data) {
             appendChatMessage(
               '[' + data.sender + '] ' + data.message,

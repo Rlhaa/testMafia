@@ -131,15 +131,22 @@ export class RoomGateway implements OnGatewayDisconnect {
   // ──────────────────────────────
 
   @SubscribeMessage('chatMessage')
-  handleChatMessage(
+  async handleChatMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
-  ) {
+  ): Promise<void> {
+    const gameId = await this.getCurrentGameId(data.roomId)
+    const gameData = await this.getGameData(data.roomId, gameId)
+    const you = this.roomService.getUserSocketMap(data.userId);
     // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
+    if(gameData.phase !== 'night'){
     this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
       sender: data.userId,
       message: data.message,
-    });
+    })}
+    else if(gameData.phase === 'night'){
+      this.server.to(String(you)).emit('NOT:CHAT')
+    }
   }
 
   @SubscribeMessage('chatDead')
