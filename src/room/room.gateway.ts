@@ -500,47 +500,6 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 1. 밤 시작 이벤트 처리
-  // ✅ 1. 밤 시작 이벤트 처리 (중복 실행 방지)
-  @SubscribeMessage('NIGHT:START')
-  async handleNightStart(
-    @MessageBody() data: { roomId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    console.log('🌙 NIGHT:START 이벤트 수신됨', data.roomId);
-    try {
-      const gameId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!gameId) {
-        throw new BadRequestException(
-          '현재 진행 중인 게임이 존재하지 않습니다.',
-        );
-      }
-
-      // ✅ 중복 실행 방지 (이미 밤이면 실행 안 함)
-      const currentPhase = await this.gameService.getGamePhase(data.roomId);
-      if (currentPhase === 'night') {
-        console.warn(`⚠️ 이미 방 ${data.roomId}는 NIGHT 상태입니다.`);
-        return;
-      }
-
-      const nightPhase = await this.gameService.startNightPhase(data.roomId);
-
-      // 모든 플레이어에게 밤 시작 이벤트 전달
-      this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
-        roomId: data.roomId,
-        nightNumber: nightPhase.nightNumber,
-        message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
-      });
-
-      console.log(
-        `🌌 Room ${data.roomId} - Night ${nightPhase.nightNumber} 시작됨`,
-      );
-    } catch (error) {
-      console.error('🚨 NIGHT:START 처리 중 오류 발생', error);
-      client.emit('error', { message: '밤 시작 처리 중 오류 발생.' });
-    }
-  }
-
   // ✅ 마피아 타겟 선택
   @SubscribeMessage('ACTION:MAFIA_TARGET')
   async handleMafiaTarget(

@@ -792,6 +792,17 @@ export class GameService {
       throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
     const redisKey = `room:${roomId}:game:${gameId}`;
+    // 게임 데이터 가져오기
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 현재 마피아가 살아있는지 확인
+    const mafiaPlayer = players.find((p) => p.id === userId);
+    if (!mafiaPlayer || !mafiaPlayer.isAlive) {
+      throw new BadRequestException(
+        `죽은 플레이어(${userId})는 타겟을 지정할 수 없습니다.`,
+      );
+    }
 
     // 기존 마피아 타겟 불러오기
     const mafiaTargetsStr = await this.redisClient.hget(
@@ -915,42 +926,36 @@ export class GameService {
   // 마피아,경찰,의사가 행동을 완료했을 때에 작동하는 함수
   async triggerNightProcessing(server: Server, roomId: string) {
     try {
-      const allCompleted = await this.checkAllNightActionsCompleted(roomId);
-      console.log(`✅ [NIGHT] 모든 밤 액션 완료 상태: ${allCompleted}`);
+      console.log(`🔥 모든 밤 액션이 완료됨. 밤 결과 처리 시작...`);
+      const result = await this.processNightResult(roomId);
 
-      if (allCompleted) {
-        console.log(`🔥 모든 밤 액션이 완료됨. 밤 결과 처리 시작...`);
-        const result = await this.processNightResult(roomId);
+      console.log(`🌙 [NIGHT RESULT] 처리 완료:`, result);
 
-        console.log(`🌙 [NIGHT RESULT] 처리 완료:`, result);
-
-        // ✅ 게임 종료 체크
-        const endCheck = await this.checkEndGame(roomId);
-        if (endCheck.isGameOver) {
-          console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
-          const endResult = await this.endGame(roomId);
-          return { gameOver: true, endResult };
-        }
-
-        // 게임 결과 전송
-        server.to(roomId).emit('GAME:RESULT_TEST');
-
-        // ✅ 낮 단계로 즉시 이동
-        console.log(`🌞 낮 단계로 전환 준비 중...`);
-        const gameId = await this.getCurrentGameId(roomId);
-        if (gameId) {
-          // 🔹 낮으로 전환되기 전에 phase를 'day'로 설정
-          await this.redisClient.hset(
-            `room:${roomId}:game:${gameId}`,
-            'phase',
-            'day',
-          );
-
-          const newDay = await this.startDayPhase(roomId, gameId);
-          return { gameOver: false, nightResult: result, newDay };
-        }
+      // ✅ 게임 종료 체크
+      const endCheck = await this.checkEndGame(roomId);
+      if (endCheck.isGameOver) {
+        console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
+        const endResult = await this.endGame(roomId);
+        return { gameOver: true, endResult };
       }
 
+      // 게임 결과 전송
+      server.to(roomId).emit('GAME:RESULT_TEST');
+
+      // ✅ 낮 단계로 즉시 이동
+      console.log(`🌞 낮 단계로 전환 준비 중...`);
+      const gameId = await this.getCurrentGameId(roomId);
+      if (gameId) {
+        // 🔹 낮으로 전환되기 전에 phase를 'day'로 설정
+        await this.redisClient.hset(
+          `room:${roomId}:game:${gameId}`,
+          'phase',
+          'day',
+        );
+
+        const newDay = await this.startDayPhase(roomId, gameId);
+        return { gameOver: false, nightResult: result, newDay };
+      }
       return { gameOver: false, nightResult: null, newDay: null };
     } catch (error) {
       console.error(`🚨 NIGHT 처리 중 오류 발생:`, error);

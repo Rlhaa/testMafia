@@ -474,7 +474,6 @@
             document.getElementById('secondVoteContainer').style.display =
               'none';
             showRoleActionContainer();
-            socket.emit('NIGHT:START', { roomId: roomId });
           });
 
           socket.on('ROOM:NIGHT_START', function (data) {
