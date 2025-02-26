@@ -516,10 +516,12 @@
 
             // ✅ 경찰 조사 결과 표시
             if (data.result && data.result.policeResult) {
-              appendChatMessage(
-                `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
-                true,
-              );
+              if (sender.role === 'police') {
+                appendChatMessage(
+                  `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
+                  true,
+                );
+              }
             }
 
             // ✅ 배경 색상 원래대로 변경 (밤 종료)

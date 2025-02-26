@@ -659,6 +659,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         return; // 게임이 끝났으므로 더 이상 낮 단계로 이동하지 않음
       }
       await this.gameService.removeNightResultProcessed(roomId);
+      return result;
       // ✅ 낮 단계 전환 (10초 후)
       // setTimeout(async () => {
       //   const gameId = await this.gameService.getCurrentGameId(roomId); // 🔥 gameId 조회 추가

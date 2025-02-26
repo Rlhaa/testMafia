@@ -970,20 +970,9 @@ export class GameService {
   async triggerNightProcessing(server: Server, roomId: string) {
     try {
       console.log(`🔥 모든 밤 액션이 완료됨. 밤 결과 처리 시작...`);
-      const result = await this.processNightResult(roomId);
-
-      console.log(`🌙 [NIGHT RESULT] 처리 완료:`, result);
-
-      // ✅ 게임 종료 체크
-      const endCheck = await this.checkEndGame(roomId);
-      if (endCheck.isGameOver) {
-        console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
-        const endResult = await this.endGame(roomId);
-        return { gameOver: true, endResult };
-      }
 
       // 게임 결과 전송
-      this.roomGateway.handleNightResult(roomId);
+      const result = await this.roomGateway.handleNightResult(roomId);
 
       // ✅ 낮 단계로 즉시 이동
       console.log(`🌞 낮 단계로 전환 준비 중...`);
