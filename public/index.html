@@ -387,6 +387,76 @@
             console.log('게임 종료 데이터:', data);
           });
 
+          socket.on('NIGHT:BACKGROUND', function (data) {
+            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+            // 전체 배경은 검정색으로
+            document.body.style.backgroundColor = 'black';
+            // div 배경은 순수 흰색 대신 연한 회색으로 변경
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#e0e0e0';
+            //sender.isAlive 지정 필요
+            socket.emit('UPDATE:MY_INFO', {
+              roomId: roomId,
+              userId: currentUserId,
+            });
+            socket.on('myInfo', function (data) {
+              sender = data.sender;
+              console.log(sender);
+            });
+          });
+
+          // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+          socket.on('VOTE:FIRST:TARGET:EFFECT', function (data) {
+            console.log('VOTE:FIRST:TARGET:EFFECT 이벤트 수신:', data);
+            var winnerBtn = document.querySelector(
+              `.occupant-btn[data-userid="${data.winnerId}"]`,
+            );
+            if (winnerBtn) {
+              winnerBtn.classList.add('blink');
+            }
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
+            document.getElementById('secondVoteContainer').style.display =
+              'block';
+          });
+
+          // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
+          socket.on('VOTE:SECOND:DEAD', function (data) {
+            console.log('VOTE:SECOND:DEAD 이벤트 수신:', data);
+            var targetId = data.targetId;
+            var targetBtn = document.querySelector(
+              `.occupant-btn[data-userid="${targetId}"]`,
+            );
+            if (targetBtn) {
+              targetBtn.classList.remove('blink'); // 깜빡임 제거
+              targetBtn.classList.remove('btn-outline-primary');
+              targetBtn.classList.add('btn-secondary');
+              targetBtn.disabled = true;
+            }
+            document.getElementById('secondVoteContainer').style.display =
+              'none';
+          });
+
+          // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거
+          socket.on('VOTE:SECOND:TIE', function (data) {
+            console.log('VOTE:SECOND:TIE 이벤트 수신:', data);
+            var targetId = data.targetId;
+            var targetBtn = document.querySelector(
+              `.occupant-btn[data-userid="${targetId}"]`,
+            );
+            if (targetBtn) {
+              targetBtn.classList.remove('blink'); // 깜빡임 제거
+              targetBtn.classList.remove('btn-outline-primary');
+            }
+            document.getElementById('secondVoteContainer').style.display =
+              'none';
+          });
+
           // 밤 시작 신호 수신 시 역할 버튼 표시
           socket.on('NIGHT:START:SIGNAL', function (data) {
             console.log('🌙 NIGHT:START:SIGNAL 이벤트 수신:', data);
