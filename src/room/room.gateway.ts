@@ -459,7 +459,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit('gameEnd', gameEndResult);
         return;
       }
-
+      // CHAND 밤 페이즈 붙여두
       //  밤 페이즈로 이동
       this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
         targetId,
@@ -469,10 +469,16 @@ export class RoomGateway implements OnGatewayDisconnect {
         message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
       });
 
-      this.gameService.startNightPhase(roomId);
-      this.server.to(roomId).emit('NIGHT:PHASE', {
-        message: '밤이 찾아옵니다.',
+      // ✅ **밤 단계 시작 - `startNightPhase` 호출**
+      console.log(`🌙 NIGHT:START 이벤트 실행 - 방 ${roomId}`);
+      const nightResult = await this.gameService.startNightPhase(roomId);
+
+      this.server.to(roomId).emit('ROOM:NIGHT_START', {
+        roomId: roomId,
+        nightNumber: nightResult.nightNumber,
+        message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
       });
+
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
     } catch (error) {
       console.error('finalizeFirstVote 오류 발생:', error);
@@ -493,128 +499,153 @@ export class RoomGateway implements OnGatewayDisconnect {
   }
 
   // 1. 밤 시작 이벤트 처리
-  @SubscribeMessage('START:NIGHT')
+  // ✅ 1. 밤 시작 이벤트 처리 (중복 실행 방지)
+  @SubscribeMessage('NIGHT:START')
   async handleNightStart(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
+    console.log('🌙 NIGHT:START 이벤트 수신됨', data.roomId);
     try {
-      const nightNumber = await this.gameService.startNightPhase(data.roomId);
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
+      // ✅ 중복 실행 방지 (이미 밤이면 실행 안 함)
+      const currentPhase = await this.gameService.getGamePhase(data.roomId);
+      if (currentPhase === 'night') {
+        console.warn(`⚠️ 이미 방 ${data.roomId}는 NIGHT 상태입니다.`);
+        return;
+      }
+
+      const nightPhase = await this.gameService.startNightPhase(data.roomId);
+
+      // 모든 플레이어에게 밤 시작 이벤트 전달
       this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
         roomId: data.roomId,
-        nightNumber,
+        nightNumber: nightPhase.nightNumber,
         message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
       });
+
+      console.log(
+        `🌌 Room ${data.roomId} - Night ${nightPhase.nightNumber} 시작됨`,
+      );
     } catch (error) {
+      console.error('🚨 NIGHT:START 처리 중 오류 발생', error);
       client.emit('error', { message: '밤 시작 처리 중 오류 발생.' });
     }
   }
 
-  // 2. 마피아 공격 이벤트 처리
+  // ✅ 마피아 타겟 선택
   @SubscribeMessage('ACTION:MAFIA_TARGET')
   async handleMafiaTarget(
     @MessageBody()
-    data: {
-      roomId: string;
-      userId: number | string;
-      targetUserId: number | string;
-    },
+    data: { roomId: string; userId: number; targetUserId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
-
       await this.gameService.selectMafiaTarget(
         data.roomId,
-        userId,
-        targetUserId,
+        data.userId,
+        data.targetUserId,
       );
-      client.emit('ACTION:MAFIA_TARGET', { message: '마피아 대상 선택 완료' });
+      await this.gameService.setNightActionComplete(data.roomId, 'mafia');
+
+      console.log(`🔥 [마피아] 대상 선택 완료: ${data.targetUserId}`);
+
+      this.server.to(data.roomId).emit('ACTION:MAFIA_TARGET', {
+        message: '마피아 대상 선택 완료',
+      });
+
+      // ✅ 밤 행동 완료 체크 후 처리
+      const allCompleted = await this.gameService.checkAllNightActionsCompleted(
+        data.roomId,
+      );
+      if (allCompleted) {
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
+      }
     } catch (error) {
+      console.error('🚨 마피아 공격 오류:', error);
       client.emit('error', { message: '마피아 공격 처리 중 오류 발생.' });
     }
   }
 
-  // 3. 의사 보호 이벤트 처리 (결과는 의사에게만 전송)
-  @SubscribeMessage('ACTION:DOCTOR_TARGET')
-  async handleDoctorTarget(
-    @MessageBody()
-    data: {
-      roomId: string;
-      userId?: number | string;
-      targetUserId?: number | string;
-    },
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
-          message: '의사 보호 대상이 올바르게 제공되지 않았습니다.',
-        });
-        return;
-      }
-
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
-
-      if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
-          message: '의사 보호 대상 ID가 올바르지 않습니다.',
-        });
-        return;
-      }
-
-      await this.gameService.saveDoctorTarget(data.roomId, targetUserId);
-      client.emit('ACTION:DOCTOR_TARGET', { message: '보호 대상 선택 완료' });
-    } catch (error) {
-      client.emit('error', { message: '의사 보호 처리 중 오류 발생.' });
-    }
-  }
-
-  // 4. 경찰 조사 이벤트 처리 (결과는 경찰에게만 전송)
+  // ✅ 경찰 조사
   @SubscribeMessage('ACTION:POLICE_TARGET')
   async handlePoliceTarget(
     @MessageBody()
-    data: {
-      roomId: string;
-      userId?: number | string;
-      targetUserId?: number | string;
-    },
+    data: { roomId: string; userId: number; targetUserId: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
-          message: '경찰 조사 대상이 올바르게 제공되지 않았습니다.',
-        });
-        return;
+      await this.gameService.savePoliceTarget(data.roomId, data.targetUserId);
+      await this.gameService.setNightActionComplete(data.roomId, 'police');
+
+      console.log(`🔍 [경찰] 조사 대상 선택 완료: ${data.targetUserId}`);
+
+      this.server
+        .to(data.roomId)
+        .emit('ACTION:POLICE_TARGET', { message: '경찰 조사 완료' });
+
+      // ✅ 밤 행동 완료 체크 후 처리
+      const allCompleted = await this.gameService.checkAllNightActionsCompleted(
+        data.roomId,
+      );
+      if (allCompleted) {
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
       }
-
-      const userId = Number(data.userId);
-      const targetUserId = Number(data.targetUserId);
-
-      if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
-          message: '경찰 조사 대상 ID가 올바르지 않습니다.',
-        });
-        return;
-      }
-
-      await this.gameService.savePoliceTarget(data.roomId, targetUserId);
-      client.emit('ACTION:POLICE_TARGET', { message: '조사 대상 선택 완료' });
     } catch (error) {
+      console.error('🚨 경찰 조사 오류:', error);
       client.emit('error', { message: '경찰 조사 처리 중 오류 발생.' });
     }
   }
 
-  // 5. 경찰 조사 결과 전송 (경찰에게만 전달)
+  // ✅ 의사 보호
+  @SubscribeMessage('ACTION:DOCTOR_TARGET')
+  async handleDoctorTarget(
+    @MessageBody()
+    data: { roomId: string; userId: number; targetUserId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      await this.gameService.saveDoctorTarget(data.roomId, data.targetUserId);
+      await this.gameService.setNightActionComplete(data.roomId, 'doctor');
+
+      console.log(`💊 [의사] 보호 대상 선택 완료: ${data.targetUserId}`);
+
+      this.server
+        .to(data.roomId)
+        .emit('ACTION:DOCTOR_TARGET', { message: '의사 보호 완료' });
+
+      // ✅ 밤 행동 완료 체크 후 처리
+      const allCompleted = await this.gameService.checkAllNightActionsCompleted(
+        data.roomId,
+      );
+      if (allCompleted) {
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
+      }
+    } catch (error) {
+      console.error('🚨 의사 보호 오류:', error);
+      client.emit('error', { message: '의사 보호 처리 중 오류 발생.' });
+    }
+  }
+  //  경찰 조사 결과 전송
   @SubscribeMessage('REQUEST:POLICE_RESULT')
   async handlePoliceResult(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
     try {
+      const gameId = await this.gameService.getCurrentGameId(data.roomId);
+      if (!gameId) {
+        throw new BadRequestException(
+          '현재 진행 중인 게임이 존재하지 않습니다.',
+        );
+      }
+
       const result = await this.gameService.getPoliceResult(data.roomId);
       if (!result.policeId) {
         client.emit('error', { message: '경찰이 존재하지 않습니다.' });
@@ -635,28 +666,62 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
-  // 6. 밤 결과 처리 후 발표 (모든 플레이어에게 알림)
+  // ✅  밤 결과 처리 후 발표 (이건 유지해야 함)
   @SubscribeMessage('PROCESS:NIGHT_RESULT')
   async handleNightResult(
     @MessageBody() data: { roomId: string },
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const result = await this.gameService.processNightResult(data.roomId);
+      console.log(`🌙 Room ${data.roomId} - NIGHT RESULT PROCESSING`);
 
-      const endCheck = await this.gameService.checkEndGame(data.roomId);
-      if (endCheck.isGameOver) {
-        const endResult = await this.gameService.endGame(data.roomId);
-        this.server.to(data.roomId).emit('gameEnd', endResult);
+      // 🔥 이미 밤 결과가 처리된 경우 실행 방지
+      if (await this.gameService.isNightResultProcessed(data.roomId)) {
+        console.warn(`⚠️ Room ${data.roomId}: 밤 결과가 이미 처리되었습니다.`);
         return;
       }
 
+      // ✅ 밤 결과 처리 실행
+      const result = await this.gameService.processNightResult(data.roomId);
+      console.log(`🛑 밤 결과:`, result);
+
+      // ✅ 중복 실행 방지 플래그 저장
+      await this.gameService.setNightResultProcessed(data.roomId);
+
+      // ✅ 밤 결과 브로드캐스트 (1번만 실행)
       this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
         roomId: data.roomId,
         result,
-        message: `밤 결과: ${result.details}`,
+        message: `🌙 밤 결과: ${result.details}`,
       });
+      console.log('밤 결과 브로드캐스트 완료');
+
+      // ✅ 게임 종료 체크
+      const endCheck = await this.gameService.checkEndGame(data.roomId);
+      if (endCheck.isGameOver) {
+        console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
+        const endResult = await this.gameService.endGame(data.roomId);
+        this.server.to(data.roomId).emit('gameEnd', endResult);
+        return; // 게임이 끝났으므로 더 이상 낮 단계로 이동하지 않음
+      }
+
+      // ✅ 낮 단계 전환 (10초 후)
+      setTimeout(async () => {
+        const gameId = await this.gameService.getCurrentGameId(data.roomId); // 🔥 gameId 조회 추가
+        if (!gameId) {
+          console.error('🚨 낮 단계 전환 실패: gameId가 null임.');
+          return;
+        }
+
+        await this.gameService.startDayPhase(data.roomId, gameId); // ✅ gameId 전달
+        this.server.to(data.roomId).emit('message', {
+          sender: 'system',
+          message: `🌞 낮이 밝았습니다!`,
+        });
+        console.log(`✅ 낮 단계로 이동`);
+      }, 10000);
     } catch (error) {
+      console.error(`🚨 NIGHT RESULT ERROR:`, error);
       client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
     }
   }

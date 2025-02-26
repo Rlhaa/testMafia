@@ -164,6 +164,46 @@
           width: 100%;
         }
       }
+
+      #roleActionContainer {
+        margin-top: 10px;
+        text-align: center;
+      }
+      #roleActionContainer button {
+        margin: 5px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background-color 0.3s ease,
+          transform 0.3s ease;
+      }
+      #roleActionContainer button.btn-danger {
+        background-color: #e74c3c;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-danger:hover {
+        background-color: #c0392b;
+        transform: scale(1.05);
+      }
+      #roleActionContainer button.btn-primary {
+        background-color: #3498db;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-primary:hover {
+        background-color: #2980b9;
+        transform: scale(1.05);
+      }
+      #roleActionContainer button.btn-success {
+        background-color: #2ecc71;
+        color: #fff;
+      }
+      #roleActionContainer button.btn-success:hover {
+        background-color: #27ae60;
+        transform: scale(1.05);
+      }
     </style>
   </head>
 
@@ -332,6 +372,13 @@
               'block';
           });
 
+          socket.on('POLICE:RESULT', function (data) {
+            appendChatMessage(
+              '[경찰 조사 결과] 대상의 역할: ' + data.role,
+              true,
+            );
+          });
+
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
           socket.on('gameEnd', function (data) {
             // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
@@ -340,135 +387,89 @@
             console.log('게임 종료 데이터:', data);
           });
 
-          socket.on('NIGHT:START', function (data) {
-            console.log('NIGHT:START 이벤트 수신:', data);
-
-            // 메시지를 채팅창에 출력
-            appendChatMessage(`[SYSTEM] ${data.message}`, true);
-
-            // // UI 변경 - 배경 어둡게 변경
-            // document.body.style.backgroundColor = 'black';
-
-            // // 컨테이너 배경 변경 (밤 테마 적용)
-            // var chatContainer = document.querySelector('.chat-container');
-            // var occupantContainer = document.querySelector(
-            //   '.occupant-container',
-            // );
-            // if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
-            // if (occupantContainer)
-            //   occupantContainer.style.backgroundColor = '#2c3e50';
-
-            // // 모든 버튼 비활성화 (투표 버튼 숨기기)
-            // document.getElementById('firstVoteContainer').style.display =
-            //   'none';
-            // document.getElementById('secondVoteContainer').style.display =
-            //   'none';
-
-            // 역할별 능력 버튼 초기화
-            document.getElementById('roleActionContainer').style.display =
-              'block';
-            document.getElementById('mafiaActionBtn').style.display = 'none';
-            document.getElementById('policeActionBtn').style.display = 'none';
-            document.getElementById('doctorActionBtn').style.display = 'none';
-
-            // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
-            if (sender.role === 'mafia') {
-              appendChatMessage(
-                `[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('mafiaActionBtn').style.display =
-                'inline-block';
-            } else if (sender.role === 'police') {
-              appendChatMessage(
-                `[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('policeActionBtn').style.display =
-                'inline-block';
-            } else if (sender.role === 'doctor') {
-              appendChatMessage(
-                `[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.`,
-                true,
-              );
-              document.getElementById('doctorActionBtn').style.display =
-                'inline-block';
-            } else {
-              appendChatMessage(
-                `[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.`,
-                true,
-              );
-            }
-          });
-
-          socket.on('NIGHT:BACKGROUND', function (data) {
-            console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
-            // 전체 배경은 검정색으로
+          // 밤 시작 신호 수신 시 역할 버튼 표시
+          socket.on('NIGHT:START:SIGNAL', function (data) {
+            console.log('🌙 NIGHT:START:SIGNAL 이벤트 수신:', data);
+            appendChatMessage('[SYSTEM] 밤 단계로 전환됩니다...', true);
             document.body.style.backgroundColor = 'black';
-            // div 배경은 순수 흰색 대신 연한 회색으로 변경
             var chatContainer = document.querySelector('.chat-container');
             var occupantContainer = document.querySelector(
               '.occupant-container',
             );
-            if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
+            if (chatContainer) chatContainer.style.backgroundColor = '#2c3e50';
             if (occupantContainer)
-              occupantContainer.style.backgroundColor = '#e0e0e0';
-            //sender.isAlive 지정 필요
-            socket.emit('UPDATE:MY_INFO', {
-              roomId: roomId,
-              userId: currentUserId,
-            });
-            socket.on('myInfo', function (data) {
-              sender = data.sender;
-              console.log(sender);
-            });
-          });
-
-          // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-          socket.on('VOTE:FIRST:TARGET:EFFECT', function (data) {
-            console.log('VOTE:FIRST:TARGET:EFFECT 이벤트 수신:', data);
-            var winnerBtn = document.querySelector(
-              `.occupant-btn[data-userid="${data.winnerId}"]`,
-            );
-            if (winnerBtn) {
-              winnerBtn.classList.add('blink');
-            }
+              occupantContainer.style.backgroundColor = '#2c3e50';
             document.getElementById('firstVoteContainer').style.display =
               'none';
             document.getElementById('secondVoteContainer').style.display =
-              'block';
+              'none';
+            showRoleActionContainer();
+            socket.emit('NIGHT:START', { roomId: roomId });
           });
 
-          // VOTE:SECOND:DEAD 이벤트 수신 시, 대상 버튼의 blink 효과 제거 및 비활성화
-          socket.on('VOTE:SECOND:DEAD', function (data) {
-            console.log('VOTE:SECOND:DEAD 이벤트 수신:', data);
-            var targetId = data.targetId;
-            var targetBtn = document.querySelector(
-              `.occupant-btn[data-userid="${targetId}"]`,
-            );
-            if (targetBtn) {
-              targetBtn.classList.remove('blink'); // 깜빡임 제거
-              targetBtn.classList.remove('btn-outline-primary');
-              targetBtn.classList.add('btn-secondary');
-              targetBtn.disabled = true;
-            }
-            document.getElementById('secondVoteContainer').style.display =
-              'none';
+          socket.on('ROOM:NIGHT_START', function (data) {
+            console.log('🌌 ROOM:NIGHT_START 이벤트 수신:', data);
+            appendChatMessage('[SYSTEM] ' + data.message, true);
+            document.body.style.backgroundColor = 'black';
+            // 단순 안내 메시지, 역할 버튼은 NIGHT:START:SIGNAL에서 처리
           });
 
-          // VOTE:SECOND:TIE 이벤트 수신 시, 대상 버튼의 blink 효과 제거
-          socket.on('VOTE:SECOND:TIE', function (data) {
-            console.log('VOTE:SECOND:TIE 이벤트 수신:', data);
-            var targetId = data.targetId;
-            var targetBtn = document.querySelector(
-              `.occupant-btn[data-userid="${targetId}"]`,
-            );
-            if (targetBtn) {
-              targetBtn.classList.remove('blink'); // 깜빡임 제거
-              targetBtn.classList.remove('btn-outline-primary');
+          // 밤 결과를 받는 함수.
+          socket.on('ROOM:NIGHT_RESULT', function (data) {
+            console.log('🌙 ROOM:NIGHT_RESULT 이벤트 수신:', data);
+
+            // ✅ 밤 결과 메시지를 채팅창에 추가
+            appendChatMessage(`[SYSTEM] ${data.message}`, true);
+
+            // ✅ 사망한 플레이어 강조 표시
+            if (data.result && data.result.killedUserId) {
+              var killedUserId = data.result.killedUserId;
+              var killedUserBtn = document.querySelector(
+                `.occupant-btn[data-userid="${killedUserId}"]`,
+              );
+              if (killedUserBtn) {
+                killedUserBtn.style.backgroundColor = 'red';
+                killedUserBtn.style.color = 'white';
+                killedUserBtn.textContent += ' (사망)';
+              }
+              appendChatMessage(
+                `[SYSTEM] 플레이어 ${killedUserId}가 밤에 사망했습니다.`,
+                true,
+              );
             }
-            document.getElementById('secondVoteContainer').style.display =
-              'none';
+
+            // ✅ 경찰 조사 결과 표시
+            if (data.result && data.result.policeResult) {
+              appendChatMessage(
+                `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
+                true,
+              );
+            }
+
+            // ✅ 배경 색상 원래대로 변경 (밤 종료)
+            document.body.style.backgroundColor = '#f0f4f8';
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#ffffff';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#ffffff';
+
+            // ✅ 역할 버튼 숨기기
+            hideRoleActionContainer();
+          });
+
+          // 밤 결과를 테스트
+          socket.on('GAME:RESULT_TEST', function (data) {
+            console.log('🌙 GAME:RESULT_TEST 이벤트 수신:', data);
+            appendChatMessage(
+              '[SYSTEM] 밤 테스트 결과 수신 되었습니다....',
+              true,
+            );
+            // 이제 무엇을 더 해야 할까?
+            // 서버야 나 밤 게임 결과줘!
+            socket.emit('PROCESS:NIGHT_RESULT', { roomId });
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트
@@ -693,6 +694,156 @@
           b.classList.remove('selected');
         });
         selectedTargetId = null;
+      }
+
+      // 밤 로직 처리 함수 마피아
+      function handleMafiaAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:MAFIA_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[마피아] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 경찰 함수
+      function handlePoliceAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:POLICE_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[경찰] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 의사 함수
+      function handleDoctorAction() {
+        if (!selectedTargetId) {
+          alert('대상을 선택하세요.');
+          return;
+        }
+        socket.emit(
+          'ACTION:DOCTOR_TARGET',
+          {
+            roomId,
+            userId: currentUserId,
+            targetUserId: Number(selectedTargetId),
+          },
+          function (response) {
+            if (response && response.success) {
+              appendChatMessage('[의사] 능력 사용 완료!', true);
+              hideRoleActionContainer();
+              clearSelection();
+              checkNightActionsCompleted(); // 🔥 추가됨
+            } else {
+              alert(response?.message || '능력 사용 실패');
+            }
+          },
+        );
+      }
+
+      // 밤 로직 역할별 버튼 핸들러 부착 (한 번만)
+      function attachRoleActionHandlers() {
+        document
+          .getElementById('mafiaActionBtn')
+          .addEventListener('click', handleMafiaAction);
+        document
+          .getElementById('policeActionBtn')
+          .addEventListener('click', handlePoliceAction);
+        document
+          .getElementById('doctorActionBtn')
+          .addEventListener('click', handleDoctorAction);
+      }
+      attachRoleActionHandlers();
+
+      // 밤 로직 역할 버튼 컨테이너 관련 함수
+      function showRoleActionContainer() {
+        var container = document.getElementById('roleActionContainer');
+        container.style.display = 'block';
+        document.getElementById('mafiaActionBtn').style.display = 'none';
+        document.getElementById('policeActionBtn').style.display = 'none';
+        document.getElementById('doctorActionBtn').style.display = 'none';
+        console.log(
+          'showRoleActionContainer, currentUserRole:',
+          currentUserRole,
+        );
+        if (currentUserRole === 'mafia') {
+          document.getElementById('mafiaActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[마피아] 밤이 되었습니다. 제거할 대상을 선택하세요.',
+            true,
+          );
+        } else if (currentUserRole === 'police') {
+          document.getElementById('policeActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[경찰] 밤이 되었습니다. 조사할 대상을 선택하세요.',
+            true,
+          );
+        } else if (currentUserRole === 'doctor') {
+          document.getElementById('doctorActionBtn').style.display = 'block';
+          appendChatMessage(
+            '[의사] 밤이 되었습니다. 보호할 대상을 선택하세요.',
+            true,
+          );
+        } else {
+          appendChatMessage(
+            '[SYSTEM] 밤이 되었습니다. 결과를 기다려 주세요.',
+            true,
+          );
+        }
+      }
+      //밤 로직 관련 함수
+      function hideRoleActionContainer() {
+        document.getElementById('roleActionContainer').style.display = 'none';
+      }
+      // 밤 액션 체크 함수 -> 실행이 안됨.
+      function checkNightActionsCompleted() {
+        console.log('checkNightActionsCompleted');
+        socket.emit(
+          'CHECK:NIGHT_ACTIONS',
+          { roomId: roomId },
+          function (response) {
+            console.log('CHECK:NIGHT_ACTIONS 응답:', response);
+            if (response.allActionsCompleted) {
+              console.log(
+                '🔥 모든 밤 액션 완료됨. `PROCESS:NIGHT_RESULT` 요청!',
+              );
+              socket.emit('PROCESS:NIGHT_RESULT', { roomId: roomId });
+            }
+          },
+        );
       }
     </script>
   </body>
