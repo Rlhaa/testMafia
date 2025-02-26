@@ -64,6 +64,11 @@ export class RoomService {
     server.to(roomId).emit('message', { sender: 'system', message });
   }
 
+  // 유저 소켓맵 리턴
+  getUserSocketMap(userId: number) {
+    return this.userSocketMap.get(userId);
+  }
+
   // ──────────────────────────────
   // 방 정보 조회 및 업데이트
   // ──────────────────────────────
@@ -177,9 +182,6 @@ export class RoomService {
     }
   }
 
-  getUserSocketMap(userId: number) {
-    return this.userSocketMap.get(userId);
-  }
   // joinRoom: 클라이언트의 방 입장 및 관련 비즈니스 로직 실행
   // 서버 인스턴스, 클라이언트 소켓, 방 ID, 사용자 ID를 매개변수로 받음
   async joinRoom(

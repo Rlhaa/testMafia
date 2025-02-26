@@ -74,6 +74,59 @@ export class RoomGateway implements OnGatewayDisconnect {
   }
 
   // ──────────────────────────────
+  // 범용 핸들러
+  // by 김호진
+  // (페이즈 전환이랑 사망 처리는 동환님 로직이랑 겹쳐서 필요 없어질 수도 있음)
+  // (디테일 추가 단계에서 연습 모드를 추가하고 특정 상황을 연출하는 버튼을 만들어야다면 필요할지도)
+  // ──────────────────────────────
+
+  //내 직업, 생존 여부 전달
+  @SubscribeMessage('UPDATE:MY_INFO')
+  async handlePlayerInfo(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const you = this.roomService.getUserSocketMap(data.userId);
+    const me = await this.getSpeakerInfo(data.roomId, data.userId);
+    this.server.to(String(you)).emit('myInfo', { sender: me });
+  }
+
+  // //페이즈 전환
+  // @SubscribeMessage('SET_PHASE')
+  // async handleSetPhase(
+  //   @MessageBody() data: { roomId: string; phase: string },
+  //   @ConnectedSocket() client: Socket,
+  // ): Promise<void> {
+  //   // 방의 플레이어 정보를 가져옵니다.
+  //   const gameId = await this.gameService.getCurrentGameId(data.roomId);
+  //   if (!gameId) {
+  //     throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
+  //   }
+
+  //   await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
+  //   this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
+  // }
+
+  // //사망 처리 이벤트
+  // @SubscribeMessage('KILL_PLAYERS')
+  // async handleKillPlayers(
+  //   @MessageBody() data: { roomId: string; players: number[] },
+  //   @ConnectedSocket() client: Socket,
+  // ) {
+  //   try {
+  //     await this.gameService.killPlayers(data.roomId, data.players);
+  //     //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
+  //     this.server.to(data.roomId).emit('PLAYERS_KILLED', {
+  //       message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
+  //       isAlive: false,
+  //     });
+  //   } catch (error) {
+  //     console.error('handleKillPlayers 에러 발생:', error);
+  //     client.emit('error', { message: '사망 처리 중 오류 발생.' });
+  //   }
+  // }
+
+  // ──────────────────────────────
   // 기본 이벤트 핸들러 (채팅, 입장, 퇴장, 연결 종료)
   // ──────────────────────────────
 
@@ -173,52 +226,6 @@ export class RoomGateway implements OnGatewayDisconnect {
     } catch (error) {
       console.error('handleMafiaMessage Error:', error);
       client.emit('error', { message: '마피아 메시지 처리 중 오류 발생.' });
-    }
-  }
-
-  //내 직업, 생존 여부 전달
-  @SubscribeMessage('UPDATE:MY_INFO')
-  async handlePlayerInfo(
-    @MessageBody() data: { roomId: string; userId: number },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const you = this.roomService.getUserSocketMap(data.userId);
-    const me = await this.getSpeakerInfo(data.roomId, data.userId);
-    this.server.to(String(you)).emit('myInfo', { sender: me });
-  }
-
-  //테스트용 임시로 페이즈 변경하는 버튼에 대응하는 게이트웨이
-  @SubscribeMessage('SET_PHASE')
-  async handleSetPhase(
-    @MessageBody() data: { roomId: string; phase: string },
-    @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    // 방의 플레이어 정보를 가져옵니다.
-    const gameId = await this.gameService.getCurrentGameId(data.roomId);
-    if (!gameId) {
-      throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
-    }
-
-    await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
-    this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
-  }
-
-  //사망 처리 이벤트
-  @SubscribeMessage('KILL_PLAYERS')
-  async handleKillPlayers(
-    @MessageBody() data: { roomId: string; players: number[] },
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      await this.gameService.killPlayers(data.roomId, data.players);
-      //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
-      this.server.to(data.roomId).emit('PLAYERS_KILLED', {
-        message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
-        isAlive: false,
-      });
-    } catch (error) {
-      console.error('handleKillPlayers 에러 발생:', error);
-      client.emit('error', { message: '사망 처리 중 오류 발생.' });
     }
   }
 
