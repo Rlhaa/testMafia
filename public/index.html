@@ -410,7 +410,14 @@
             document.getElementById('policeActionBtn').style.display = 'none';
             document.getElementById('doctorActionBtn').style.display = 'none';
             //발신자 정보 갱신
-            sender = data.sender;
+            socket.on('myInfo', function (senderInfo) {
+              socket.emit('UPDATE:MY_INFO', {
+                roomId: roomId,
+                userId: currentUserId,
+              });
+              sender = senderInfo;
+            });
+
             console.log('----------', sender);
             // 특정 역할(마피아, 경찰, 의사)에게만 액션 버튼 표시
             if (sender.role === 'mafia') {

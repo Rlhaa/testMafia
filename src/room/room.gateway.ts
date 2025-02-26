@@ -175,6 +175,51 @@ export class RoomGateway implements OnGatewayDisconnect {
     }
   }
 
+  // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
+  // >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)
+  @SubscribeMessage('joinRoom')
+  async handleJoinRoom(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const { roomId, userId } = data;
+    await this.roomService.joinRoom(this.server, client, roomId, userId);
+  }
+
+  @SubscribeMessage('leaveRoom')
+  async handleLeaveRoom(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.roomService.leaveRoom(
+      this.server,
+      client,
+      data.roomId,
+      data.userId,
+    );
+  }
+
+  async handleDisconnect(client: Socket) {
+    const roomId = client.handshake.auth.roomId as string;
+    const userId = client.handshake.auth.userId as number;
+    await this.roomService.leaveRoom(this.server, client, roomId, userId);
+  }
+
+  // ──────────────────────────────
+  // 범용 핸들러
+  // (페이즈 전환이랑 사망 처리는 동환님 로직이랑 겹쳐서 필요 없어질 수도 있음)
+  // ──────────────────────────────
+
+  //내 직업, 생존 여부 전달
+  @SubscribeMessage('UPDATE:MY_INFO')
+  async handlePlayerInfo(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const me = await this.getSpeakerInfo(data.roomId, data.userId);
+    this.server.to(data.roomId).emit('myInfo', { sender: me });
+  }
+
   //페이즈 전환
   @SubscribeMessage('SET_PHASE')
   async handleSetPhase(
@@ -208,36 +253,6 @@ export class RoomGateway implements OnGatewayDisconnect {
       console.error('handleKillPlayers 에러 발생:', error);
       client.emit('error', { message: '사망 처리 중 오류 발생.' });
     }
-  }
-
-  // joinRoom 이벤트: 룸 서비스의 joinRoom 메서드 호출
-  // >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)
-  @SubscribeMessage('joinRoom')
-  async handleJoinRoom(
-    @MessageBody() data: { roomId: string; userId: number },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const { roomId, userId } = data;
-    await this.roomService.joinRoom(this.server, client, roomId, userId);
-  }
-
-  @SubscribeMessage('leaveRoom')
-  async handleLeaveRoom(
-    @MessageBody() data: { roomId: string; userId: number },
-    @ConnectedSocket() client: Socket,
-  ) {
-    await this.roomService.leaveRoom(
-      this.server,
-      client,
-      data.roomId,
-      data.userId,
-    );
-  }
-
-  async handleDisconnect(client: Socket) {
-    const roomId = client.handshake.auth.roomId as string;
-    const userId = client.handshake.auth.userId as number;
-    await this.roomService.leaveRoom(this.server, client, roomId, userId);
   }
 
   // ──────────────────────────────
