@@ -57,12 +57,17 @@ export class RoomGateway implements OnGatewayDisconnect {
     return await this.gameService.getGameData(roomId, gameId);
   }
 
+  async getPlayers(gameData) {
+    let players: Player[] = gameData.players;
+    return players;
+  }
+
   //발신인 정보 받아오기
   async getSpeakerInfo(roomId: string, userId: number) {
     // 방의 플레이어 정보를 가져옵니다.
     let gameId = await this.getCurrentGameId(roomId);
     let gameData = await this.getGameData(roomId, gameId);
-    let players: Player[] = gameData.players;
+    let players: Player[] = await this.getPlayers(gameData);
 
     // 메시지를 보낸 사용자의 정보를 찾습니다.
     const sender = players.find((player) => player.id === userId);
@@ -131,15 +136,23 @@ export class RoomGateway implements OnGatewayDisconnect {
   // ──────────────────────────────
 
   @SubscribeMessage('chatMessage')
-  handleChatMessage(
+  async handleChatMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
   ) {
-    // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
-    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
-      sender: data.userId,
-      message: data.message,
-    });
+    // 방의 플레이어 정보를 가져옵니다.
+    const gameId = await this.getCurrentGameId(data.roomId);
+    const gameData = await this.getGameData(data.roomId, gameId);
+
+    if (gameData.phase !== 'night') {
+      // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
+      this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
+        sender: data.userId,
+        message: data.message,
+      });
+    } else {
+      //시민 입장 밤에 채팅 시도
+    }
   }
 
   @SubscribeMessage('chatDead')
