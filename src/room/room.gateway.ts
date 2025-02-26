@@ -182,9 +182,9 @@ export class RoomGateway implements OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; userId: number },
     @ConnectedSocket() client: Socket,
   ) {
+    const you = this.roomService.getUserSocketMap(data.userId);
     const me = await this.getSpeakerInfo(data.roomId, data.userId);
-    console.log('-----------------------------------------------', me);
-    this.server.to(data.roomId).emit('myInfo', { sender: me });
+    this.server.to(String(you)).emit('myInfo', { sender: me });
   }
 
   //테스트용 임시로 페이즈 변경하는 버튼에 대응하는 게이트웨이
