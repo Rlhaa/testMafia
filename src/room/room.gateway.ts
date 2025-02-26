@@ -69,6 +69,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     if (!sender) {
       throw new BadRequestException('발신자를 찾을 수 없습니다.');
     }
+    
     return sender;
   }
 
@@ -109,7 +110,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           deadPlayer.id,
         );
         if (deadPlayerSocketId) {
-          this.server.to(deadPlayerSocketId).emit('message', {
+          this.server.to(deadPlayerSocketId).emit('CHAT:DEAD', {
             sender: sender.id,
             message: data.message,
           });
@@ -155,7 +156,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       mafias.forEach((mafia) => {
         const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
-          this.server.to(mafiaPlayerSocketId).emit('message', {
+          this.server.to(mafiaPlayerSocketId).emit('CHAT:MAFIA', {
             sender: sender.id,
             message: data.message,
           });

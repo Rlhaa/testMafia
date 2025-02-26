@@ -121,6 +121,14 @@
         font-weight: bold;
       }
 
+      .red-message {
+        color: red;
+      }
+
+      .purple-message {
+        color: purple;
+      }
+
       #voteBtn,
       #executeBtn,
       #survivalBtn {
@@ -286,15 +294,21 @@
           });
 
           socket.on('CHAT:DEAD', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
+            appendChatMessage(
+              '[' + data.sender + '] ' + data.message,
+              'CHAT:DEAD',
+            );
           });
 
           socket.on('CHAT:MAFIA', function (data) {
-            appendChatMessage('[' + data.sender + '] ' + data.message);
+            appendChatMessage(
+              '[' + data.sender + '] ' + data.message,
+              'CHAT:MAFIA',
+            );
           });
 
           socket.on('system_message', function (data) {
-            appendChatMessage(`[공지] ${data.message}`, true);
+            appendChatMessage(`[공지] ${data.message}`, 'system_message');
           });
 
           document
@@ -564,13 +578,19 @@
                 });
             }); ////2.21 18시:  오류해결 위해 괄호를 추가했었음
         });
-      // 채팅 메시지 추가 함수
+
       function appendChatMessage(message, isRole) {
         var chatMessagesDiv = document.getElementById('chatMessages');
         var messageElement = document.createElement('div');
-        if (isRole) {
+
+        if (isRole === 'system_message') {
           messageElement.classList.add('role-message');
+        } else if (isRole === 'CHAT:DEAD') {
+          messageElement.classList.add('red-message');
+        } else if (isRole === 'CHAT:MAFIA') {
+          messageElement.classList.add('purple-message');
         }
+
         messageElement.textContent = message;
         chatMessagesDiv.appendChild(messageElement);
 
