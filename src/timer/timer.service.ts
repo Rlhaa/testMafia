@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Observable, Subject, timer } from 'rxjs';
-import { map, takeUntil } from 'rxjs/operators';
+import { Observable, Subject, timer, interval } from 'rxjs';
+import { map, takeUntil, tap } from 'rxjs/operators';
 
 @Injectable()
 export class TimerService {

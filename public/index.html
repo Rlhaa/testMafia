@@ -413,6 +413,15 @@
             if (chatContainer) chatContainer.style.backgroundColor = '#e0e0e0';
             if (occupantContainer)
               occupantContainer.style.backgroundColor = '#e0e0e0';
+            //sender.isAlive 지정 필요
+            socket.emit('UPDATE:MY_INFO', {
+              roomId: roomId,
+              userId: currentUserId,
+            });
+            socket.on('myInfo', function (data) {
+              sender = data.sender;
+              console.log(sender);
+            });
           });
 
           // VOTE:FIRST:TARGET:EFFECT 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
@@ -443,7 +452,6 @@
               targetBtn.classList.add('btn-secondary');
               targetBtn.disabled = true;
             }
-            //sender.isAlive 지정 필요
             document.getElementById('secondVoteContainer').style.display =
               'none';
           });
@@ -606,6 +614,7 @@
         if (message.trim() === '') return;
         if (sender.isAlive === false) {
           // 죽은 사람은 무조건 'chatDead'
+          console.log('죽은경우');
           socket.emit('chatDead', {
             roomId: roomId,
             userId: currentUserId,
@@ -616,6 +625,7 @@
           }
         } else if (sender.role === 'mafia') {
           // 마피아이면서 살아있는 경우
+          console.log('마살');
           socket.emit('chatMafia', {
             roomId: roomId,
             userId: currentUserId,
@@ -625,6 +635,7 @@
             messageInputElem.value = '';
           }
         } else {
+          console.log('일반채팅');
           socket.emit('chatMessage', {
             roomId: roomId,
             userId: currentUserId,

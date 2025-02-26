@@ -153,7 +153,7 @@ export class GameService {
     const updatedPlayers = players.map((player, index) => ({
       ...player,
       role: rolesPool[index],
-      isAlive: alivetest[index],
+      isAlive: true,
     }));
     console.log('Updated Players:', updatedPlayers);
 

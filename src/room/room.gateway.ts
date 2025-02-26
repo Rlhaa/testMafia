@@ -60,16 +60,16 @@ export class RoomGateway implements OnGatewayDisconnect {
   //발신인 정보 받아오기
   async getSpeakerInfo(roomId: string, userId: number) {
     // 방의 플레이어 정보를 가져옵니다.
-    const gameId = await this.getCurrentGameId(roomId);
-    const gameData = await this.getGameData(roomId, gameId);
-    const players: Player[] = gameData.players;
+    let gameId = await this.getCurrentGameId(roomId);
+    let gameData = await this.getGameData(roomId, gameId);
+    let players: Player[] = gameData.players;
 
     // 메시지를 보낸 사용자의 정보를 찾습니다.
     const sender = players.find((player) => player.id === userId);
     if (!sender) {
       throw new BadRequestException('발신자를 찾을 수 없습니다.');
     }
-    
+
     return sender;
   }
 
@@ -174,6 +174,17 @@ export class RoomGateway implements OnGatewayDisconnect {
       console.error('handleMafiaMessage Error:', error);
       client.emit('error', { message: '마피아 메시지 처리 중 오류 발생.' });
     }
+  }
+
+  //내 직업, 생존 여부 전달
+  @SubscribeMessage('UPDATE:MY_INFO')
+  async handlePlayerInfo(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const me = await this.getSpeakerInfo(data.roomId, data.userId);
+    console.log('-----------------------------------------------', me);
+    this.server.to(data.roomId).emit('myInfo', { sender: me });
   }
 
   //테스트용 임시로 페이즈 변경하는 버튼에 대응하는 게이트웨이
@@ -430,7 +441,6 @@ export class RoomGateway implements OnGatewayDisconnect {
         //  사망자 확인을 위해 gameId 추가하여 getDead 호출 (오류 수정)
         const deadPlayers = await this.gameService.getDead(roomId, gameId);
         console.log(`현재 사망자 목록:`, deadPlayers);
-
         this.roomService.sendSystemMessage(
           this.server,
           roomId,
