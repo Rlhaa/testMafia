@@ -576,59 +576,53 @@ export class RoomGateway implements OnGatewayDisconnect {
     try {
       console.log(`🌙 Room ${data.roomId} - NIGHT RESULT PROCESSING`);
 
-      const gameId = await this.gameService.getCurrentGameId(data.roomId);
-      if (!gameId) {
-        console.error('🚨 NIGHT RESULT ERROR: gameId가 존재하지 않음.');
-        client.emit('error', {
-          message: '현재 진행 중인 게임이 존재하지 않습니다.',
-        });
+      // 🔥 이미 밤 결과가 처리된 경우 실행 방지
+      if (await this.gameService.isNightResultProcessed(data.roomId)) {
+        console.warn(`⚠️ Room ${data.roomId}: 밤 결과가 이미 처리되었습니다.`);
         return;
       }
 
-      // 밤 결과 처리
+      // ✅ 밤 결과 처리 실행
       const result = await this.gameService.processNightResult(data.roomId);
       console.log(`🛑 밤 결과:`, result);
 
-      // 게임 종료 체크
+      // ✅ 중복 실행 방지 플래그 저장
+      await this.gameService.setNightResultProcessed(data.roomId);
+
+      // ✅ 밤 결과 브로드캐스트 (1번만 실행)
+      this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
+        roomId: data.roomId,
+        result,
+        message: `🌙 밤 결과: ${result.details}`,
+      });
+      console.log('밤 결과 브로드캐스트 완료');
+
+      // ✅ 게임 종료 체크
       const endCheck = await this.gameService.checkEndGame(data.roomId);
       if (endCheck.isGameOver) {
         console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
         const endResult = await this.gameService.endGame(data.roomId);
         this.server.to(data.roomId).emit('gameEnd', endResult);
-        return;
+        return; // 게임이 끝났으므로 더 이상 낮 단계로 이동하지 않음
       }
 
-      // 밤 결과 브로드캐스트
-      console.log('밤 결과 브로드캐스트 START');
-      // this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
-      client.emit('ROOM:NIGHT_RESULT', {
-        roomId: data.roomId,
-        result,
-        message: `🌙 밤 결과: ${result.details}`,
-      });
-      console.log('밤 결과 브로드캐스트 END');
-
-      // ✅ 낮 단계로 전환 (10초 후) (gameId가 null인지 다시 한 번 체크)
-      console.log(`낮 단계로 전환 준비중...`);
+      // ✅ 낮 단계 전환 (10초 후)
       setTimeout(async () => {
-        const newGameId = await this.gameService.getCurrentGameId(data.roomId);
-        if (!newGameId) {
+        const gameId = await this.gameService.getCurrentGameId(data.roomId); // 🔥 gameId 조회 추가
+        if (!gameId) {
           console.error('🚨 낮 단계 전환 실패: gameId가 null임.');
           return;
         }
 
-        const newDay = await this.gameService.startDayPhase(
-          data.roomId,
-          newGameId,
-        );
-        client.emit('message', {
+        await this.gameService.startDayPhase(data.roomId, gameId); // ✅ gameId 전달
+        this.server.to(data.roomId).emit('message', {
           sender: 'system',
-          message: `Day ${newDay} 낮이 밝았습니다!`,
+          message: `🌞 낮이 밝았습니다!`,
         });
-        console.log(`✅ [DAY] Day ${newDay} 낮 단계로 이동`);
+        console.log(`✅ 낮 단계로 이동`);
       }, 10000);
     } catch (error) {
-      console.error(`🚨 NIGHT RESULT ERROR:`, error.message, error.stack);
+      console.error(`🚨 NIGHT RESULT ERROR:`, error);
       client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
     }
   }

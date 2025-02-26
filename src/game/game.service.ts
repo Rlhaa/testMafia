@@ -980,4 +980,27 @@ export class GameService {
 
     return phase;
   }
+
+  // ✅ 밤 결과가 이미 처리되었는지 확인하는 메서드
+  async isNightResultProcessed(roomId: string): Promise<boolean> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return false;
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    const resultProcessed = await this.redisClient.hget(
+      redisKey,
+      'nightResultProcessed',
+    );
+
+    return resultProcessed === 'true';
+  }
+
+  // ✅ 밤 결과가 처리되었음을 기록하는 메서드
+  async setNightResultProcessed(roomId: string): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return;
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    await this.redisClient.hset(redisKey, 'nightResultProcessed', 'true');
+  }
 }

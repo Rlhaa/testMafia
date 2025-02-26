@@ -409,8 +409,47 @@
           // 밤 결과를 받는 함수.
           socket.on('ROOM:NIGHT_RESULT', function (data) {
             console.log('🌙 ROOM:NIGHT_RESULT 이벤트 수신:', data);
-            appendChatMessage('[SYSTEM] 밤 결과가 수신 되었습니다....', true);
-            // 이제 무엇을 더 해야 할까?
+
+            // ✅ 밤 결과 메시지를 채팅창에 추가
+            appendChatMessage(`[SYSTEM] ${data.message}`, true);
+
+            // ✅ 사망한 플레이어 강조 표시
+            if (data.result && data.result.killedUserId) {
+              var killedUserId = data.result.killedUserId;
+              var killedUserBtn = document.querySelector(
+                `.occupant-btn[data-userid="${killedUserId}"]`,
+              );
+              if (killedUserBtn) {
+                killedUserBtn.style.backgroundColor = 'red';
+                killedUserBtn.style.color = 'white';
+                killedUserBtn.textContent += ' (사망)';
+              }
+              appendChatMessage(
+                `[SYSTEM] 플레이어 ${killedUserId}가 밤에 사망했습니다.`,
+                true,
+              );
+            }
+
+            // ✅ 경찰 조사 결과 표시
+            if (data.result && data.result.policeResult) {
+              appendChatMessage(
+                `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
+                true,
+              );
+            }
+
+            // ✅ 배경 색상 원래대로 변경 (밤 종료)
+            document.body.style.backgroundColor = '#f0f4f8';
+            var chatContainer = document.querySelector('.chat-container');
+            var occupantContainer = document.querySelector(
+              '.occupant-container',
+            );
+            if (chatContainer) chatContainer.style.backgroundColor = '#ffffff';
+            if (occupantContainer)
+              occupantContainer.style.backgroundColor = '#ffffff';
+
+            // ✅ 역할 버튼 숨기기
+            hideRoleActionContainer();
           });
 
           // 밤 결과를 테스트
