@@ -370,9 +370,16 @@
             isVotingPhase = true;
             document.getElementById('firstVoteContainer').style.display =
               'block';
+            voteBtn.disabled = false;
+            executeBtn.disabled = false;
+            survivalBtn.disabled = false;
+            voteBtn.classList.remove('disabled=btn');
+            executeBtn.classList.remove('disabled-btn');
+            survivalBtn.classList.remove('disabled-btn');
           });
 
           socket.on('POLICE:RESULT', function (data) {
+            console.log('결과 수신 완료');
             appendChatMessage(
               '[경찰 조사 결과] 대상의 역할: ' + data.role,
               true,
@@ -536,9 +543,6 @@
               '[SYSTEM] 밤 테스트 결과 수신 되었습니다....',
               true,
             );
-            // 이제 무엇을 더 해야 할까?
-            // 서버야 나 밤 게임 결과줘!
-            socket.emit('PROCESS:NIGHT_RESULT', { roomId });
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트

@@ -172,7 +172,11 @@ export class GameService {
   }
 
   // 낮 단계 시작 (day 증가 및 투표 초기화)
-  async startDayPhase(roomId: string, gameId: string): Promise<number> {
+  async startDayPhase(
+    roomId: string,
+    gameId: string,
+    server: Server,
+  ): Promise<number> {
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     let currentDay = parseInt(gameData.day, 10) || 0;
@@ -182,11 +186,33 @@ export class GameService {
     await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
     await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
 
+    await this.clearNightActions(roomId);
+    server.to(roomId).emit('VOTE:FIRST:ENABLE');
+    server.to(roomId).emit('message', {
+      sender: 'system',
+      message: `Day ${currentDay} 낮이 밝았습니다!`,
+    });
     this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
       this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
 
     return currentDay;
+  }
+
+  //투표 결과 초기화 함수
+  async clearDayVote(roomId: string): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return;
+
+    const redisFirstKey = `room:${roomId}:game:${gameId}:firstVote`;
+    const redisSecondKey = `room:${roomId}:game:${gameId}:secondVote`;
+    // 각 역할의 밤 행동 상태를 삭제
+    await Promise.all([
+      this.redisClient.set(redisFirstKey, JSON.stringify([])),
+      this.redisClient.set(redisSecondKey, JSON.stringify([])),
+    ]);
+
+    console.log(`🔄 Room ${roomId}의 낮 투표 상태가 초기화되었습니다.`);
   }
 
   // 플레이어 사망
@@ -608,7 +634,7 @@ export class GameService {
     console.log(
       `✅ 방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
     );
-
+    await this.clearDayVote(roomId);
     return { nightNumber, mafias, dead };
   }
 
@@ -746,6 +772,23 @@ export class GameService {
     );
 
     return allActionsCompleted;
+  }
+
+  // 밤 행동 상태를 초기화하는 메서드
+  async clearNightActions(roomId: string): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return;
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+
+    // 각 역할의 밤 행동 상태를 삭제
+    await Promise.all([
+      this.redisClient.hdel(redisKey, 'nightAction:mafia'),
+      this.redisClient.hdel(redisKey, 'nightAction:police'),
+      this.redisClient.hdel(redisKey, 'nightAction:doctor'),
+    ]);
+
+    console.log(`🔄 Room ${roomId}의 밤 행동 상태가 초기화되었습니다.`);
   }
 
   async checkEndGame(
@@ -940,7 +983,7 @@ export class GameService {
       }
 
       // 게임 결과 전송
-      server.to(roomId).emit('GAME:RESULT_TEST');
+      this.roomGateway.handleNightResult(roomId);
 
       // ✅ 낮 단계로 즉시 이동
       console.log(`🌞 낮 단계로 전환 준비 중...`);
@@ -953,7 +996,7 @@ export class GameService {
           'day',
         );
 
-        const newDay = await this.startDayPhase(roomId, gameId);
+        const newDay = await this.startDayPhase(roomId, gameId, server);
         return { gameOver: false, nightResult: result, newDay };
       }
       return { gameOver: false, nightResult: null, newDay: null };
@@ -999,5 +1042,14 @@ export class GameService {
 
     const redisKey = `room:${roomId}:game:${gameId}`;
     await this.redisClient.hset(redisKey, 'nightResultProcessed', 'true');
+  }
+
+  // ✅ 밤 결과 처리 상태를 삭제하는 메서드
+  async removeNightResultProcessed(roomId: string): Promise<void> {
+    const gameId = await this.getCurrentGameId(roomId);
+    if (!gameId) return;
+
+    const redisKey = `room:${roomId}:game:${gameId}`;
+    await this.redisClient.hdel(redisKey, 'nightResultProcessed');
   }
 }
