@@ -343,7 +343,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         //   targetId,
         // });
         // console.log('VOTE:SECOND:DEAD: 클라이언트로 수신됨');
-        this.server.to(data.roomId).emit('NIGHT:START:SIGNAL');
+        this.server.to(data.roomId).emit('NIGHT:START:SIGNAL', 'apple');
         console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
       }
 
@@ -466,7 +466,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         data.roomId,
       );
       if (allCompleted) {
-        await this.gameService.triggerNightProcessing(data.roomId);
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
       }
     } catch (error) {
       console.error('🚨 마피아 공격 오류:', error);
@@ -496,7 +496,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         data.roomId,
       );
       if (allCompleted) {
-        await this.gameService.triggerNightProcessing(data.roomId);
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
       }
     } catch (error) {
       console.error('🚨 경찰 조사 오류:', error);
@@ -526,7 +526,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         data.roomId,
       );
       if (allCompleted) {
-        await this.gameService.triggerNightProcessing(data.roomId);
+        await this.gameService.triggerNightProcessing(this.server, data.roomId);
       }
     } catch (error) {
       console.error('🚨 의사 보호 오류:', error);
@@ -599,11 +599,14 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
 
       // 밤 결과 브로드캐스트
-      this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
+      console.log('밤 결과 브로드캐스트 START');
+      // this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
+      client.emit('ROOM:NIGHT_RESULT', {
         roomId: data.roomId,
         result,
         message: `🌙 밤 결과: ${result.details}`,
       });
+      console.log('밤 결과 브로드캐스트 END');
 
       // ✅ 낮 단계로 전환 (10초 후) (gameId가 null인지 다시 한 번 체크)
       console.log(`낮 단계로 전환 준비중...`);
@@ -618,7 +621,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           data.roomId,
           newGameId,
         );
-        this.server.to(data.roomId).emit('message', {
+        client.emit('message', {
           sender: 'system',
           message: `Day ${newDay} 낮이 밝았습니다!`,
         });

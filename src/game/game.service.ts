@@ -9,6 +9,8 @@ import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { TimerService } from 'src/timer/timer.service';
 import { NightResultService } from 'src/notice/night-result.service';
+import { RoomGateway } from 'src/room/room.gateway';
+import { Server, Socket, RemoteSocket } from 'socket.io';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -36,6 +38,8 @@ export class GameService {
     private readonly timerService: TimerService, // 타이머 테스트용
     @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService, //
+    @Inject(forwardRef(() => RoomGateway))
+    private readonly roomGateway: RoomGateway,
   ) {}
 
   // ──────────────────────────────
@@ -850,63 +854,74 @@ export class GameService {
   }
 
   // 밤 결과 처리 함수
-  async processNightResult(
-    roomId: string,
-  ): Promise<{ killedUserIds: number[]; details: string; policeResult?: any }> {
+  // 밤 결과 처리 함수 (마피아, 의사, 경찰 능력 반영)
+  async processNightResult(roomId: string): Promise<{
+    killedUserId?: number;
+    details: string;
+    policeResult?: any;
+  }> {
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId)
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
 
     const redisKey = `room:${roomId}:game:${gameId}`;
+
+    // ✅ 마피아가 선택한 타겟 목록 가져오기
     const mafiaTargetsStr = await this.redisClient.hget(
       redisKey,
       'mafiaTargets',
-    ); // 배열로 저장된 마피아 타겟들
+    );
     const doctorTargetStr = await this.redisClient.hget(
       redisKey,
       'doctorTarget',
     );
 
-    const mafiaTargets = mafiaTargetsStr ? JSON.parse(mafiaTargetsStr) : []; // 여러 마피아가 선택한 타겟을 배열로 변환
+    const mafiaTargets = mafiaTargetsStr ? JSON.parse(mafiaTargetsStr) : [];
     const doctorTarget = doctorTargetStr ? Number(doctorTargetStr) : undefined;
 
     console.log(
       `🔍 마피아 타겟 목록: ${mafiaTargets}, 의사 보호 대상: ${doctorTarget}`,
     );
 
-    let killedUserIds: number[] = [];
-    let details = '마피아 공격 성공';
+    let killedUserId: number | undefined;
+    let nightSummary = '';
 
-    // 마피아 타겟 중 의사 보호 대상이 아닌 사람들만 죽이기
-    for (const target of mafiaTargets) {
-      if (target !== doctorTarget) {
-        console.log(`💀 플레이어 ${target} 사망 처리.`);
-        await this.markPlayerAsDead(roomId, target);
-        killedUserIds.push(target);
+    if (mafiaTargets.length > 0) {
+      // ✅ 마피아들이 투표한 타겟 중에서 랜덤으로 한 명 선택
+      const randomTarget =
+        mafiaTargets[Math.floor(Math.random() * mafiaTargets.length)].targetId;
+
+      console.log(`🎯 선택된 랜덤 타겟: ${randomTarget}`);
+
+      if (randomTarget !== doctorTarget) {
+        console.log(`💀 플레이어 ${randomTarget} 사망 처리.`);
+        await this.markPlayerAsDead(roomId, randomTarget);
+        killedUserId = randomTarget;
+        nightSummary += `지난 밤, 플레이어 ${randomTarget}가 사망했습니다. `;
       } else {
-        console.log(`🛡️ 의사가 보호하여 ${target} 살해 취소됨.`);
+        console.log(`🛡️ 의사가 ${randomTarget}를 보호하여 살해가 무효화됨.`);
+        nightSummary += `의사가 플레이어 ${randomTarget}를 보호하여 살해가 무효화되었습니다. `;
       }
-    }
-
-    if (killedUserIds.length === 0) {
-      details = '의사 보호로 인해 모든 공격이 무효화됨';
     }
 
     // ✅ 경찰 조사 결과 가져오기
     const policeResult = await this.getPoliceResult(roomId);
 
-    // ✅ policeResult가 존재할 때만 결과에 포함
-    const result: any = { killedUserIds, details };
+    // ✅ 최종 결과 반환
+    const result: any = { killedUserId, details: nightSummary.trim() };
     if (Object.keys(policeResult).length > 0) {
       result.policeResult = policeResult;
     }
 
     console.log(`🌙 [NIGHT RESULT] 최종 처리 결과:`, result);
+    // 클라이언트 한테 여기서 보내 줘야 한다.
+    // this.roomGateway.handleNightResult()
+
     return result;
   }
 
   // 마피아,경찰,의사가 행동을 완료했을 때에 작동하는 함수
-  async triggerNightProcessing(roomId: string) {
+  async triggerNightProcessing(server: Server, roomId: string) {
     try {
       const allCompleted = await this.checkAllNightActionsCompleted(roomId);
       console.log(`✅ [NIGHT] 모든 밤 액션 완료 상태: ${allCompleted}`);
@@ -924,6 +939,9 @@ export class GameService {
           const endResult = await this.endGame(roomId);
           return { gameOver: true, endResult };
         }
+
+        // 게임 결과 전송
+        server.to(roomId).emit('GAME:RESULT_TEST');
 
         // ✅ 낮 단계로 즉시 이동
         console.log(`🌞 낮 단계로 전환 준비 중...`);

@@ -362,13 +362,14 @@
               true,
             );
           });
-
+          /*
           socket.on('NIGHT:START:SIGNAL', function () {
             console.log('NIGHT:START:SIGNAL 클라이언트로 전송됨');
             socket.emit('NIGHT:START', {
               roomId: roomId,
             });
           });
+          */
 
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
           socket.on('gameEnd', function (data) {
@@ -403,6 +404,25 @@
             appendChatMessage('[SYSTEM] ' + data.message, true);
             document.body.style.backgroundColor = 'black';
             // 단순 안내 메시지, 역할 버튼은 NIGHT:START:SIGNAL에서 처리
+          });
+
+          // 밤 결과를 받는 함수.
+          socket.on('ROOM:NIGHT_RESULT', function (data) {
+            console.log('🌙 ROOM:NIGHT_RESULT 이벤트 수신:', data);
+            appendChatMessage('[SYSTEM] 밤 결과가 수신 되었습니다....', true);
+            // 이제 무엇을 더 해야 할까?
+          });
+
+          // 밤 결과를 테스트
+          socket.on('GAME:RESULT_TEST', function (data) {
+            console.log('🌙 GAME:RESULT_TEST 이벤트 수신:', data);
+            appendChatMessage(
+              '[SYSTEM] 밤 테스트 결과 수신 되었습니다....',
+              true,
+            );
+            // 이제 무엇을 더 해야 할까?
+            // 서버야 나 밤 게임 결과줘!
+            socket.emit('PROCESS:NIGHT_RESULT', { roomId });
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트
@@ -744,8 +764,9 @@
       function hideRoleActionContainer() {
         document.getElementById('roleActionContainer').style.display = 'none';
       }
-      // 밤 액션 체크 함수
+      // 밤 액션 체크 함수 -> 실행이 안됨.
       function checkNightActionsCompleted() {
+        console.log('checkNightActionsCompleted');
         socket.emit(
           'CHECK:NIGHT_ACTIONS',
           { roomId: roomId },

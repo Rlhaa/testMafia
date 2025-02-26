@@ -109,6 +109,8 @@ export class NightResultService {
       dead,
     });
   }
+
+  //
 }
 
 // // GameService에서 새로 호출하는 공지 함수들 아직 정확하게 이해를 하지 못했습니다.
