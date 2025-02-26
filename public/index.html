@@ -428,7 +428,7 @@
             appendChatMessage(`[공지] ${data.message}`, 'system_message');
           });
 
-          socket.on('YOUR_ROLE', function (data) {
+          socket.on('YOUR:ROLE', function (data) {
             sender = data.sender;
             appendChatMessage(data.message, true);
           });
@@ -445,7 +445,7 @@
           });
 
           // 추가된 부분: gameEnd 이벤트 핸들러 등록
-          socket.on('gameEnd', function (data) {
+          socket.on('GAME:END', function (data) {
             // 게임 종료 이벤트 수신 시, 게임 상태 영역에 결과 메시지 표시
             appendChatMessage('게임 종료: ' + data.message);
             document.getElementById('gameStatus').textContent = data.message;
@@ -530,7 +530,7 @@
               roomId: roomId,
               userId: currentUserId,
             });
-            socket.on('myInfo', function (data) {
+            socket.on('MY:INFO', function (data) {
               sender = data.sender;
               console.log(sender);
             });

@@ -19,14 +19,14 @@ export enum RoomEvents {
   /**
    * 죽은 자들의 채팅 메시지 전송 이벤트.
    * @example
-   * socket.emit(RoomEvents.MESSAGE, { sender: userId, message: '나 뒤짐 ㅠㅠ' });
+   * socket.emit(RoomEvents.CHAT_DEAD, { sender: userId, message: '나 뒤짐 ㅠㅠ' });
    */
   CHAT_DEAD = 'CHAT:DEAD',
 
   /**
    * 밤 사이 마피아 간의 채팅 메시지 전송 이벤트.
    * @example
-   * socket.emit(RoomEvents.MESSAGE, { sender: userId, message: '1 쏘셈' });
+   * socket.emit(RoomEvents.CHAT_MAFIA, { sender: userId, message: '1 쏘셈' });
    */
   CHAT_MAFIA = 'CHAT:MAFIA',
 
@@ -42,7 +42,7 @@ export enum RoomEvents {
    * @example
    * socket.emit(RoomEvents.YOUR_ROLE, { role: playerRole });
    */
-  YOUR_ROLE = 'YOUR_ROLE',
+  YOUR_ROLE = 'YOUR:ROLE',
 
   /**
    * 1차 투표 시작을 활성화하는 이벤트.
@@ -91,5 +91,76 @@ export enum RoomEvents {
    * @example
    * client.emit(RoomEvents.VOTE_ERROR, { message: '투표 처리 에러' });
    */
-  VOTE_ERROR = 'voteError',
+  VOTE_ERROR = 'VOTE:ERROR',
+
+  /**
+   * 내 직업, 생존 여부 전달 정보를 전송되는 이벤트.
+   * @example
+   * this.server.to(userId).emit(RoomEvents.MY_INFO, data);
+   */
+  MY_INFO = 'MY:INFO',
+
+  /**
+   * 에러가 발생했을 때 전송되는 이벤트.
+   * @example
+   * server.to(roomId).emit(RoomEvents.ERROR, { message: error.message });
+   */
+  ERROR = 'error',
+
+  /**
+   * 투표 결과의 최다 득표자 정보를 전송하는 이벤트.
+   * @example
+   * this.server.to(roomId).emit(RoomEvents.VOTE_SURVIVAL, { winnerId: finalResult.winnerId, voteCount: finalResult.voteCount,});
+   */
+  VOTE_SURVIVAL = 'VOTE:SURVIVAL',
+
+  /**
+   * 게임 종료후 결과를 알려주는 이벤트.
+   * @example
+   *  this.server.to(roomId).emit(RoomEvents.GAME_END, endResult);
+   */
+  GAME_END = 'GAME:END',
+
+  /**
+   * 밤 시작을 알리는 이벤트
+   * @example
+   * this.server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_START, {data.roomId,nightNumber,message: '밤이 시작되었습니다. 각자의 직업은 행동을 계시'});
+   */
+  ROOM_NIGHT_START = 'ROOM:NIGHT_START',
+
+  /**
+   * 마피아가 사살할 대상을 선택 했을떄 이벤트
+   * @example
+   * client.emit(RoomEvents.ACTION_MAFIA_TARGET, { message: '마피아 대상 선택 완료' });
+   */
+  ACTION_MAFIA_TARGET = 'ACTION:MAFIA_TARGET',
+
+  /**
+   * 의사가 보호할 대상을 선택 했을떄 이벤트
+   * @example
+   * client.emit(RoomEvents.ACTION_DOCTOR_TARGET, { message: '보호 대상 선택 완료' });
+   */
+  ACTION_DOCTOR_TARGET = 'ACTION:DOCTOR_TARGET',
+
+  /**
+   * 경찰이 조사할 대상을 선택 했을떄 이벤트
+   * @example
+   * client.emit(RoomEvents.ACTION_POLICE_TARGET, { message: '조사 대상 선택 완료' });
+   */
+  ACTION_POLICE_TARGET = 'ACTION:POLICE_TARGET',
+
+  /**
+   * 경찰이 조사한 결과를 알리는 이벤트.
+   * @example
+   * client.emit(RoomEvents.POLICE_RESULT, {roomId, targetUserId, role});
+   */
+  POLICE_RESULT = 'POLICE:RESULT',
+
+  /**
+   * 밤의 결과를 모두에게 알리는 이벤트.
+   * @example
+   * this.server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_RESULT, {roomId, result, message: `밤 결과: ${night.data}`,});
+   */
+  ROOM_NIGHT_RESULT = 'ROOM:NIGHT_RESULT',
+  
 }
