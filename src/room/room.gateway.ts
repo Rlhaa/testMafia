@@ -163,7 +163,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           deadPlayer.id,
         );
         if (deadPlayerSocketId) {
-          this.server.to(deadPlayerSocketId).emit('CHAT:DEAD', {
+          this.server.to(deadPlayerSocketId).emit(RoomEvents.CHAT_DEAD, {
             sender: sender.id,
             message: data.message,
           });
@@ -173,7 +173,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         //이 경우 6명이 죽은 상황이면 이 짓을 6번 반복하기 때문에 비효율적
         //같은 게임 내에서 죽은 자들만 소통 가능한 채팅방과 마피아끼리만 대화 가능한 방을 별도로 파서 운영하는 건?
         if (!messageSentToDeadPlayers) {
-          this.server.to(data.roomId).emit('message', {
+          this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
             sender: sender.id,
             message: data.message,
           });
@@ -209,7 +209,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       mafias.forEach((mafia) => {
         const mafiaPlayerSocketId = this.roomService.getUserSocketMap(mafia.id);
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
-          this.server.to(mafiaPlayerSocketId).emit('CHAT:MAFIA', {
+          this.server.to(mafiaPlayerSocketId).emit(RoomEvents.CHAT_MAFIA, {
             sender: sender.id,
             message: data.message,
           });
@@ -218,7 +218,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       });
       // 마피아에게 메시지를 보냈다면 방의 모든 클라이언트에게는 보내지 않음
       if (!messageSentToMafias) {
-        this.server.to(data.roomId).emit('message', {
+        this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
           sender: sender.id,
           message: data.message,
         });

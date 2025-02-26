@@ -17,6 +17,20 @@ export enum RoomEvents {
   MESSAGE = 'message',
 
   /**
+   * 죽은 자들의 채팅 메시지 전송 이벤트.
+   * @example
+   * socket.emit(RoomEvents.MESSAGE, { sender: userId, message: '나 뒤짐 ㅠㅠ' });
+   */
+  CHAT_DEAD = 'CHAT:DEAD',
+
+  /**
+   * 밤 사이 마피아 간의 채팅 메시지 전송 이벤트.
+   * @example
+   * socket.emit(RoomEvents.MESSAGE, { sender: userId, message: '1 쏘셈' });
+   */
+  CHAT_MAFIA = 'CHAT:MAFIA',
+
+  /**
    * 방 정보 업데이트 이벤트.
    * @example
    * server.to(roomId).emit(RoomEvents.ROOM_UPDATED, roomData);
