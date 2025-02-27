@@ -14,6 +14,7 @@ import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { GameService } from '../game/game.service';
 import { NightResultService } from 'src/notice/night-result.service';
 import { TimerService } from 'src/timer/timer.service';
+import { RoomEvents } from './room.events.enum';
 
 interface Player {
   id: number;
@@ -61,7 +62,7 @@ export class RoomService {
 
   // 시스템 메시지 전송: 지정된 방의 모든 클라이언트에 'message' 이벤트 발행
   sendSystemMessage(server: Server, roomId: string, message: string): void {
-    server.to(roomId).emit('message', { sender: 'system', message });
+    server.to(roomId).emit(RoomEvents.MESSAGE, { sender: 'system', message });
   }
 
   // 유저 소켓맵 리턴
@@ -154,14 +155,14 @@ export class RoomService {
         );
         if (player) {
           setTimeout(() => {
-            socket.emit('YOUR_ROLE', {
+            socket.emit(RoomEvents.YOUR_ROLE, {
               message: `${player.role} 입니다!`,
               role: player.role,
               isAlive: player.isAlive,
               sender: player,
             });
           }, 3000);
-          socket.emit('YOUR_ROLE', {
+          socket.emit(RoomEvents.YOUR_ROLE, {
             role: player.role,
           });
         }
@@ -172,13 +173,13 @@ export class RoomService {
         .startTimer(roomId, 'gamestart', 10000)
         .toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
       const newDay = await this.gameService.startDayPhase(roomId, gameId);
-      server.to(roomId).emit('message', {
+      server.to(roomId).emit(RoomEvents.MESSAGE, {
         sender: 'system',
         message: `Day ${newDay} 낮이 밝았습니다!`,
       });
-      server.to(roomId).emit('VOTE:FIRST:ENABLE');
+      server.to(roomId).emit(RoomEvents.VOTE_FIRST_ENABLE);
     } catch (error: any) {
-      server.to(roomId).emit('error', { message: error.message });
+      server.to(roomId).emit(RoomEvents.ERROR, { message: error.message });
     }
   }
 
@@ -191,7 +192,7 @@ export class RoomService {
     userId: number,
   ): Promise<void> {
     if (!roomId || !userId) {
-      client.emit('error', { message: 'roomId와 userId가 필요합니다.' });
+      client.emit(RoomEvents.ERROR, { message: 'roomId와 userId가 필요합니다.' });
       return;
     }
 
@@ -203,7 +204,7 @@ export class RoomService {
       // 서버의 소켓 목록에서 server.sockets.sockets.get('socket_001')를 통해 실제 소켓 객체 찾음
       const previousSocket = server.sockets.sockets.get(previousSocketId);
       if (previousSocket) {
-        previousSocket.emit('error', {
+        previousSocket.emit(RoomEvents.ERROR, {
           message: '중복 접속으로 인해 연결이 종료되었습니다.',
         });
         previousSocket.disconnect();
@@ -214,7 +215,7 @@ export class RoomService {
     try {
       await this.addPlayer(roomId, { id: userId });
     } catch (error: any) {
-      client.emit('error', { message: error.message });
+      client.emit(RoomEvents.ERROR, { message: error.message });
       return;
     }
 
@@ -226,7 +227,7 @@ export class RoomService {
 
     // 최신 방 정보 조회 후 ROOM:UPDATED 이벤트 전송
     const roomData = await this.getRoomInfo(roomId);
-    server.to(roomId).emit('ROOM:UPDATED', roomData);
+    server.to(roomId).emit(RoomEvents.ROOM_UPDATED, roomData);
 
     // 방 인원이 8명이면 게임 자동 시작 타이머 설정
     const sockets = await server.in(roomId).allSockets();
@@ -263,7 +264,7 @@ export class RoomService {
     await this.updateRoomPlayers(roomId, playersArray);
 
     roomData = await this.getRoomInfo(roomId);
-    server.to(roomId).emit('ROOM:UPDATED', roomData);
+    server.to(roomId).emit(RoomEvents.ROOM_UPDATED, roomData);
 
     // 인원이 8명 미만이면 진행 중인 게임 시작 타이머 취소
     const sockets = await server.in(roomId).allSockets();

@@ -93,7 +93,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     const you = this.roomService.getUserSocketMap(data.userId);
     const me = await this.getSpeakerInfo(data.roomId, data.userId);
-    this.server.to(String(you)).emit('myInfo', { sender: me });
+    this.server.to(String(you)).emit(RoomEvents.MY_INFO, { sender: me });
   }
 
   // //페이즈 전환
@@ -139,19 +139,18 @@ export class RoomGateway implements OnGatewayDisconnect {
   async handleChatMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
-  ) {
-    // 방의 플레이어 정보를 가져옵니다.
+  ): Promise<void> {
     const gameId = await this.getCurrentGameId(data.roomId);
     const gameData = await this.getGameData(data.roomId, gameId);
-
+    const you = this.roomService.getUserSocketMap(data.userId);
+    // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
     if (gameData.phase !== 'night') {
-      // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
       this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
         sender: data.userId,
         message: data.message,
       });
-    } else {
-      //시민 입장 밤에 채팅 시도
+    } else if (gameData.phase === 'night') {
+      this.server.to(String(you)).emit('NOT:CHAT');
     }
   }
 
@@ -194,7 +193,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       });
     } catch (error) {
       console.error('handleChatDead Error:', error);
-      client.emit('error', {
+      client.emit(RoomEvents.ERROR, {
         message: '죽은 플레이어 메시지 처리 중 오류 발생.',
       });
     }
@@ -238,7 +237,9 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
     } catch (error) {
       console.error('handleMafiaMessage Error:', error);
-      client.emit('error', { message: '마피아 메시지 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '마피아 메시지 처리 중 오류 발생.',
+      });
     }
   }
 
@@ -320,7 +321,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
     } catch (error) {
       console.error('handleSecondVote 에러 발생:', error);
-      client.emit('voteError', '투표 처리 중 오류 발생.');
+      client.emit(RoomEvents.VOTE_ERROR, '투표 처리 중 오류 발생.');
     }
   }
 
@@ -384,7 +385,7 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       // 최다 득표자를 targetId로 저장
       await this.gameService.setTargetId(roomId, finalResult.winnerId!);
-      this.server.to(roomId).emit('VOTE:SURVIVAL', {
+      this.server.to(roomId).emit(RoomEvents.VOTE_SURVIVAL, {
         winnerId: finalResult.winnerId,
         voteCount: finalResult.voteCount,
       });
@@ -467,7 +468,7 @@ export class RoomGateway implements OnGatewayDisconnect {
           `플레이어 ${targetId}가 사망 처리되었습니다.`,
         );
         // 이부분 받는게 있나??
-        this.server.to(roomId).emit('VOTE:SECOND:DEAD', {
+        this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_DEAD, {
           targetId,
         });
       }
@@ -476,7 +477,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       const endCheck = await this.gameService.checkEndGame(roomId);
       if (endCheck.isGameOver) {
         const gameEndResult = await this.gameService.endGame(roomId);
-        this.server.to(roomId).emit('gameEnd', gameEndResult);
+        this.server.to(roomId).emit(RoomEvents.GAME_END, gameEndResult);
         return;
       }
 
@@ -490,7 +491,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       });
 
       this.gameService.startNightPhase(roomId);
-      this.server.to(roomId).emit('NIGHT:PHASE', {
+      this.server.to(roomId).emit(RoomEvents.NIGHT_PHASE, {
         message: '밤이 찾아옵니다.',
       });
       console.log('게임이 계속 진행됩니다. 밤 페이즈로 이동합니다.');
@@ -506,9 +507,11 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       const result = await this.gameService.endGame(data.roomId);
-      this.server.to(data.roomId).emit('gameEnd', result);
+      this.server.to(data.roomId).emit(RoomEvents.GAME_END, result);
     } catch (error) {
-      client.emit('error', { message: '게임 종료 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '게임 종료 처리 중 오류 발생.',
+      });
     }
   }
 
@@ -520,13 +523,13 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       const nightNumber = await this.gameService.startNightPhase(data.roomId);
-      this.server.to(data.roomId).emit('ROOM:NIGHT_START', {
+      this.server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_START, {
         roomId: data.roomId,
         nightNumber,
         message: '밤이 시작되었습니다. 마피아, 경찰, 의사는 행동을 수행하세요.',
       });
     } catch (error) {
-      client.emit('error', { message: '밤 시작 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, { message: '밤 시작 처리 중 오류 발생.' });
     }
   }
 
@@ -550,9 +553,13 @@ export class RoomGateway implements OnGatewayDisconnect {
         userId,
         targetUserId,
       );
-      client.emit('ACTION:MAFIA_TARGET', { message: '마피아 대상 선택 완료' });
+      client.emit(RoomEvents.ACTION_MAFIA_TARGET, {
+        message: '마피아 대상 선택 완료',
+      });
     } catch (error) {
-      client.emit('error', { message: '마피아 공격 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '마피아 공격 처리 중 오류 발생.',
+      });
     }
   }
 
@@ -569,7 +576,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
+        client.emit(RoomEvents.ERROR, {
           message: '의사 보호 대상이 올바르게 제공되지 않았습니다.',
         });
         return;
@@ -579,16 +586,20 @@ export class RoomGateway implements OnGatewayDisconnect {
       const targetUserId = Number(data.targetUserId);
 
       if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
+        client.emit(RoomEvents.ERROR, {
           message: '의사 보호 대상 ID가 올바르지 않습니다.',
         });
         return;
       }
 
       await this.gameService.saveDoctorTarget(data.roomId, targetUserId);
-      client.emit('ACTION:DOCTOR_TARGET', { message: '보호 대상 선택 완료' });
+      client.emit(RoomEvents.ACTION_DOCTOR_TARGET, {
+        message: '보호 대상 선택 완료',
+      });
     } catch (error) {
-      client.emit('error', { message: '의사 보호 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '의사 보호 처리 중 오류 발생.',
+      });
     }
   }
 
@@ -605,7 +616,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       if (!data.userId || !data.targetUserId) {
-        client.emit('error', {
+        client.emit(RoomEvents.ERROR, {
           message: '경찰 조사 대상이 올바르게 제공되지 않았습니다.',
         });
         return;
@@ -615,16 +626,20 @@ export class RoomGateway implements OnGatewayDisconnect {
       const targetUserId = Number(data.targetUserId);
 
       if (isNaN(userId) || isNaN(targetUserId)) {
-        client.emit('error', {
+        client.emit(RoomEvents.ERROR, {
           message: '경찰 조사 대상 ID가 올바르지 않습니다.',
         });
         return;
       }
 
       await this.gameService.savePoliceTarget(data.roomId, targetUserId);
-      client.emit('ACTION:POLICE_TARGET', { message: '조사 대상 선택 완료' });
+      client.emit(RoomEvents.ACTION_POLICE_TARGET, {
+        message: '조사 대상 선택 완료',
+      });
     } catch (error) {
-      client.emit('error', { message: '경찰 조사 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '경찰 조사 처리 중 오류 발생.',
+      });
     }
   }
 
@@ -637,21 +652,25 @@ export class RoomGateway implements OnGatewayDisconnect {
     try {
       const result = await this.gameService.getPoliceResult(data.roomId);
       if (!result.policeId) {
-        client.emit('error', { message: '경찰이 존재하지 않습니다.' });
+        client.emit(RoomEvents.ERROR, { message: '경찰이 존재하지 않습니다.' });
         return;
       }
       if (!result.targetUserId) {
-        client.emit('error', { message: '조사 대상이 선택되지 않았습니다.' });
+        client.emit(RoomEvents.ERROR, {
+          message: '조사 대상이 선택되지 않았습니다.',
+        });
         return;
       }
 
-      client.emit('POLICE:RESULT', {
+      client.emit(RoomEvents.POLICE_RESULT, {
         roomId: data.roomId,
         targetUserId: result.targetUserId,
         role: result.role,
       });
     } catch (error) {
-      client.emit('error', { message: '경찰 조사 결과 전송 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, {
+        message: '경찰 조사 결과 전송 중 오류 발생.',
+      });
     }
   }
 
@@ -667,17 +686,17 @@ export class RoomGateway implements OnGatewayDisconnect {
       const endCheck = await this.gameService.checkEndGame(data.roomId);
       if (endCheck.isGameOver) {
         const endResult = await this.gameService.endGame(data.roomId);
-        this.server.to(data.roomId).emit('gameEnd', endResult);
+        this.server.to(data.roomId).emit(RoomEvents.GAME_END, endResult);
         return;
       }
 
-      this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
+      this.server.to(data.roomId).emit(RoomEvents.ROOM_NIGHT_RESULT, {
         roomId: data.roomId,
         result,
         message: `밤 결과: ${result.details}`,
       });
     } catch (error) {
-      client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
+      client.emit(RoomEvents.ERROR, { message: '밤 결과 처리 중 오류 발생.' });
     }
   }
 }
