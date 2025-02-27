@@ -166,7 +166,12 @@ export class RoomService {
       await this.timerService
         .startTimer(roomId, 'gamestart', 10000)
         .toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
-      await this.gameService.startDayPhase(roomId, gameId, server);
+      const newDay = await this.gameService.startDayPhase(roomId, gameId);
+      server.to(roomId).emit('message', {
+        sender: 'system',
+        message: `Day ${newDay} 낮이 밝았습니다!`,
+      });
+      server.to(roomId).emit('VOTE:FIRST:ENABLE');
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }
