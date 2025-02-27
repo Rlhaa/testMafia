@@ -140,6 +140,18 @@ export class RoomGateway implements OnGatewayDisconnect {
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
+    // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
+    this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
+      sender: data.userId,
+      message: data.message,
+    });
+  }
+
+  @SubscribeMessage('chatCitizen')
+  async handleChatCitizen(
+    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
     const gameId = await this.getCurrentGameId(data.roomId);
     const gameData = await this.getGameData(data.roomId, gameId);
     const you = this.roomService.getUserSocketMap(data.userId);
@@ -203,7 +215,7 @@ export class RoomGateway implements OnGatewayDisconnect {
   async handleMafiaMessage(
     @MessageBody() data: { roomId: string; userId: number; message: string },
     @ConnectedSocket() client: Socket,
-  ) {
+  ): Promise<void> {
     try {
       // 방의 플레이어 정보를 가져옵니다.
       const gameId = await this.getCurrentGameId(data.roomId);

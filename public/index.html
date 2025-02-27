@@ -269,7 +269,7 @@
             auth: { roomId: roomId, userId: currentUserId },
           });
 
-          sender.role = 'citizen';
+          sender.role = 'player';
           sender.isAlive = true;
 
           // UI 표시
@@ -413,9 +413,9 @@
             appendChatMessage('[' + data.sender + '] ' + data.message);
           });
 
-          socket.on('NOT:CHAT', function() {
-            alert("밤에는 마피아만 대화할 수 있습니다.")
-            return
+          socket.on('NOT:CHAT', function () {
+            alert('밤에는 마피아만 대화할 수 있습니다.');
+            return;
           });
 
           socket.on('CHAT:DEAD', function (data) {
@@ -670,6 +670,20 @@
           // 마피아이면서 살아있는 경우
           console.log('마살');
           socket.emit('chatMafia', {
+            roomId: roomId,
+            userId: currentUserId,
+            message: message,
+          });
+          if (messageInputElem) {
+            messageInputElem.value = '';
+          }
+        } else if (
+          sender.role === 'citizen' ||
+          sender.role === 'doctor' ||
+          sender.role === 'police'
+        ) {
+          console.log('시민 채팅');
+          socket.emit('chatCitizen', {
             roomId: roomId,
             userId: currentUserId,
             message: message,
