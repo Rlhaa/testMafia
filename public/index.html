@@ -350,6 +350,20 @@
           socket.on('system_message', function (data) {
             appendChatMessage(`[공지] ${data.message}`, 'system_message');
           });
+          // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
+          socket.on('VOTE:SURVIVAL', function (data) {
+            console.log('VOTE:SURVIVAL 이벤트 수신:', data);
+            var winnerBtn = document.querySelector(
+              `.occupant-btn[data-userid="${data.winnerId}"]`,
+            );
+            if (winnerBtn) {
+              winnerBtn.classList.add('blink');
+            }
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
+            document.getElementById('secondVoteContainer').style.display =
+              'block';
+          });
 
           document
             .getElementById('sendBtn')
@@ -370,9 +384,16 @@
             isVotingPhase = true;
             document.getElementById('firstVoteContainer').style.display =
               'block';
+            voteBtn.disabled = false;
+            executeBtn.disabled = false;
+            survivalBtn.disabled = false;
+            voteBtn.classList.remove('disabled=btn');
+            survivalBtn.classList.remove('disabled-btn');
+            executeBtn.classList.remove('disabled-btn');
           });
 
           socket.on('POLICE:RESULT', function (data) {
+            console.log('결과 수신 완료');
             appendChatMessage(
               '[경찰 조사 결과] 대상의 역할: ' + data.role,
               true,
@@ -389,6 +410,9 @@
 
           socket.on('NIGHT:BACKGROUND', function (data) {
             console.log('NIGHT:BACKGROUND 이벤트 수신:', data);
+            //동점시 넘어올 때 투표버튼 지우기
+            document.getElementById('firstVoteContainer').style.display =
+              'none';
             // 전체 배경은 검정색으로
             document.body.style.backgroundColor = 'black';
             // div 배경은 순수 흰색 대신 연한 회색으로 변경
@@ -474,6 +498,12 @@
             document.getElementById('secondVoteContainer').style.display =
               'none';
             showRoleActionContainer();
+            mafiaBtn.disabled = false;
+            policeBtn.disabled = false;
+            doctorBtn.disabled = false;
+            mafiaBtn.classList.remove('disabled-btn');
+            policeBtn.classList.remove('disabled-btn');
+            doctorBtn.classList.remove('disabled-btn');
           });
 
           socket.on('ROOM:NIGHT_START', function (data) {
@@ -509,10 +539,12 @@
 
             // ✅ 경찰 조사 결과 표시
             if (data.result && data.result.policeResult) {
-              appendChatMessage(
-                `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
-                true,
-              );
+              if (sender.role === 'police') {
+                appendChatMessage(
+                  `[경찰 조사 결과] 플레이어 ${data.result.policeResult.targetUserId}의 역할: ${data.result.policeResult.role}`,
+                  true,
+                );
+              }
             }
 
             // ✅ 배경 색상 원래대로 변경 (밤 종료)
@@ -536,9 +568,6 @@
               '[SYSTEM] 밤 테스트 결과 수신 되었습니다....',
               true,
             );
-            // 이제 무엇을 더 해야 할까?
-            // 서버야 나 밤 게임 결과줘!
-            socket.emit('PROCESS:NIGHT_RESULT', { roomId });
           });
 
           // 1차 투표 확정 버튼 클릭 이벤트
@@ -586,21 +615,6 @@
                   clearSelection();
                 },
               );
-
-              // VOTE:SURVIVAL 이벤트 수신 시 2차 투표 버튼 표시 및 대상 버튼 blink 적용
-              socket.on('VOTE:SURVIVAL', function (data) {
-                console.log('VOTE:SURVIVAL 이벤트 수신:', data);
-                var winnerBtn = document.querySelector(
-                  `.occupant-btn[data-userid="${data.winnerId}"]`,
-                );
-                if (winnerBtn) {
-                  winnerBtn.classList.add('blink');
-                }
-                document.getElementById('firstVoteContainer').style.display =
-                  'none';
-                document.getElementById('secondVoteContainer').style.display =
-                  'block';
-              });
 
               // 2차 투표: 사살 버튼 클릭 이벤트
               document
@@ -789,6 +803,9 @@
             }
           },
         );
+        var mafiaBtn = document.getElementById('mafiaActionBtn');
+        mafiaBtn.disabled = true;
+        mafiaBtn.classList.add('disabled-btn');
       }
 
       // 경찰 함수
@@ -815,6 +832,9 @@
             }
           },
         );
+        var policeBtn = document.getElementById('policeActionBtn');
+        policeBtn.disabled = true;
+        policeBtn.classList.add('disabled-btn');
       }
 
       // 의사 함수
@@ -841,6 +861,9 @@
             }
           },
         );
+        var doctorBtn = document.getElementById('doctorActionBtn');
+        doctorBtn.disabled = true;
+        doctorBtn.classList.add('disabled-btn');
       }
 
       // 밤 로직 역할별 버튼 핸들러 부착 (한 번만)
