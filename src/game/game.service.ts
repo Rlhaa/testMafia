@@ -192,7 +192,7 @@ export class GameService {
       sender: 'system',
       message: `Day ${currentDay} 낮이 밝았습니다!`,
     });
-    this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
+    this.timerService.startTimer(roomId, 'day', 12000).subscribe(() => {
       this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
 
@@ -609,6 +609,7 @@ export class GameService {
   // 2. NIGHT 시작 - 게임 상태 변경 및 클라이언트 알림
   async startNightPhase(
     roomId: string,
+    server: Server,
   ): Promise<{ nightNumber: number; mafias: Player[]; dead: Player[] }> {
     const gameId = await this.getCurrentGameId(roomId);
     if (!gameId)
@@ -635,6 +636,9 @@ export class GameService {
       `✅ 방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
     );
     await this.clearDayVote(roomId);
+    this.timerService.startTimer(roomId, 'night', 30000).subscribe(() => {
+      this.triggerNightProcessing(server, roomId); //2번째 인자, 3번째 인자? 전달받기 CHAN
+    });
     return { nightNumber, mafias, dead };
   }
 

@@ -199,7 +199,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       throw new BadRequestException('게임 ID를 찾을 수 없습니다.');
     }
 
-    await this.gameService.startNightPhase(data.roomId); // 데이터베이스 업데이트
+    await this.gameService.startNightPhase(data.roomId, this.server); // 데이터베이스 업데이트
     this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
   }
 
@@ -354,11 +354,12 @@ export class RoomGateway implements OnGatewayDisconnect {
           roomId,
           `투표 결과: 동률 발생 (${finalResult.tieCandidates.join(', ')} ${finalResult.voteCount}표) → 밤 단계로 전환.`,
         );
-        this.gameService.startNightPhase(roomId);
+        this.gameService.startNightPhase(roomId, this.server);
         this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
           message: '투표 결과 동률로, 밤 단계 시작',
         });
-
+        this.server.to(roomId).emit('NIGHT:START:SIGNAL');
+        console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
         return;
       }
 
@@ -407,13 +408,15 @@ export class RoomGateway implements OnGatewayDisconnect {
           roomId,
           `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
-        this.gameService.startNightPhase(roomId);
+        this.gameService.startNightPhase(roomId, this.server);
         this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_TIE, {
           targetId,
         });
         this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
           message: '생존 투표 결과 동률로, 밤 단계 시작',
         });
+        this.server.to(roomId).emit('NIGHT:START:SIGNAL');
+        console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
         return;
       }
 
@@ -453,6 +456,9 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit('NIGHT:START:SIGNAL');
         console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
       }
+      //아무도 참여 하지 않았을 경우
+      this.server.to(roomId).emit('NIGHT:START:SIGNAL');
+      console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 수신됨');
 
       //  게임 종료 체크
       const endCheck = await this.gameService.checkEndGame(roomId);
@@ -473,7 +479,10 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       // ✅ **밤 단계 시작 - `startNightPhase` 호출**
       console.log(`🌙 NIGHT:START 이벤트 실행 - 방 ${roomId}`);
-      const nightResult = await this.gameService.startNightPhase(roomId);
+      const nightResult = await this.gameService.startNightPhase(
+        roomId,
+        this.server,
+      );
 
       this.server.to(roomId).emit('ROOM:NIGHT_START', {
         roomId: roomId,
