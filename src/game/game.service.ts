@@ -192,7 +192,7 @@ export class GameService {
       sender: 'system',
       message: `Day ${currentDay} 낮이 밝았습니다!`,
     });
-    this.timerService.startTimer(roomId, 'day', 12000).subscribe(() => {
+    this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
       this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
 
@@ -221,21 +221,21 @@ export class GameService {
     if (!gameId) {
       throw new BadRequestException('현재 진행 중인 게임이 존재하지 않습니다.');
     }
-
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
     let currentCitizenCounts = gameData.citizenCount;
     let currentMafiaCounts = gameData.mafiaCount;
-
+    console.log('----------------', playerIds);
     // 선택된 플레이어의 isAlive 속성을 false로 변경
     const updatedPlayers = players.map((player) => {
-      if (playerIds.includes(player.id)) {
+      if (playerIds.includes(+player.id)) {
         player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
         return { ...player, isAlive: false };
       }
       return player;
     });
+    console.log(updatedPlayers);
 
     await this.redisClient.hset(
       redisKey,
@@ -620,7 +620,6 @@ export class GameService {
 
     // 게임의 phase를 'night'로 설정
     await this.redisClient.hset(redisKey, 'phase', 'night');
-    console.log(`방 ${roomId} - 밤으로 전환됨.`);
 
     // 밤 횟수 관리 (nightNumber 증가)
     const nightNumber = await this.getNightCount(roomId);
@@ -636,7 +635,7 @@ export class GameService {
       `✅ 방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
     );
     await this.clearDayVote(roomId);
-    this.timerService.startTimer(roomId, 'night', 30000).subscribe(() => {
+    this.timerService.startTimer(roomId, 'night', 300000).subscribe(() => {
       this.triggerNightProcessing(server, roomId); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
     return { nightNumber, mafias, dead };
@@ -683,9 +682,15 @@ export class GameService {
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players = gameData.players || [];
+    let currentCitizenCounts = gameData.citizenCount;
+    let currentMafiaCounts = gameData.mafiaCount;
 
-    const player = players.find((p: any) => p.id === playerId);
-    if (player) player.isAlive = false;
+    console.log('+++++++++++++', players);
+    console.log('--------------', playerId);
+    const player = players.find((p: any) => p.id === String(playerId));
+    if (player)
+      player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
+    player.isAlive = false;
 
     await this.redisClient.hset(redisKey, 'players', JSON.stringify(players));
   }
