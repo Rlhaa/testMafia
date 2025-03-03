@@ -7,9 +7,12 @@ import {
 } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
+import { Server, Socket } from 'socket.io';
 import { TimerService } from 'src/timer/timer.service';
 import { NightResultService } from 'src/notice/night-result.service';
+import { RoomService } from 'src/room/room.service';
 import { RoomGateway } from 'src/room/room.gateway';
+import { WebSocketServer } from '@nestjs/websockets';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -31,6 +34,8 @@ export interface Player {
 @Injectable()
 export class GameService {
   private readonly logger = new Logger(GameService.name); //타이머 로그용 임시 추가
+  @WebSocketServer()
+  server: Server;
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
@@ -38,6 +43,8 @@ export class GameService {
     @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService,
     private readonly roomGateway: RoomGateway,
+    @Inject(forwardRef(() => RoomService))
+    private readonly roomService: RoomService,
   ) {}
 
   // ──────────────────────────────
@@ -225,6 +232,20 @@ export class GameService {
     // 선택된 플레이어의 isAlive 속성을 false로 변경
     const updatedPlayers = players.map((player) => {
       if (playerIds.includes(player.id)) {
+        ////
+        // console.log('-------------', player.id);
+        // console.log('-------------', typeof player.id);
+        // const playerSocketId = this.roomService.getUserSocketMap(player.id);
+        // console.log('-------------', playerSocketId);
+        // if (!playerSocketId) {
+        //   throw new BadRequestException('소켓 ID를 찾을 수 없습니다.');
+        // }
+        // const playerSocket = this.server.sockets.sockets.get(playerSocketId);
+        // if (playerSocket) {
+        //   // 해당 소켓을 `${roomId}_dead` room에 가입
+        //   playerSocket.join(`${roomId}_dead`);
+        // }
+        ////
         player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
         return { ...player, isAlive: false };
       }

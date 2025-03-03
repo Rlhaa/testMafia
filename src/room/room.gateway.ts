@@ -112,24 +112,24 @@ export class RoomGateway implements OnGatewayDisconnect {
   //   this.server.to(data.roomId).emit('PHASE_UPDATED', { phase: data.phase });
   // }
 
-  // //사망 처리 이벤트
-  // @SubscribeMessage('KILL_PLAYERS')
-  // async handleKillPlayers(
-  //   @MessageBody() data: { roomId: string; players: number[] },
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   try {
-  //     await this.gameService.killPlayers(data.roomId, data.players);
-  //     //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
-  //     this.server.to(data.roomId).emit('PLAYERS_KILLED', {
-  //       message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
-  //       isAlive: false,
-  //     });
-  //   } catch (error) {
-  //     console.error('handleKillPlayers 에러 발생:', error);
-  //     client.emit('error', { message: '사망 처리 중 오류 발생.' });
-  //   }
-  // }
+  //사망 처리 이벤트
+  @SubscribeMessage('KILL_PLAYERS')
+  async handleKillPlayers(
+    @MessageBody() data: { roomId: string; players: number[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      await this.gameService.killPlayers(data.roomId, data.players);
+      //const me=await this.getSpeakerInfo(data.roomId, data.players[0])
+      this.server.to(data.roomId).emit('PLAYERS_KILLED', {
+        message: `플레이어 ${data.players.join(', ')}가 사망 처리되었습니다.`,
+        isAlive: false,
+      });
+    } catch (error) {
+      console.error('handleKillPlayers 에러 발생:', error);
+      client.emit('error', { message: '사망 처리 중 오류 발생.' });
+    }
+  }
 
   // ──────────────────────────────
   // 기본 이벤트 핸들러 (채팅, 입장, 퇴장, 연결 종료)
@@ -177,6 +177,12 @@ export class RoomGateway implements OnGatewayDisconnect {
 
       // 메시지를 보낸 사용자의 정보를 찾습니다.
       const sender = await this.getSpeakerInfo(data.roomId, data.userId);
+
+      // // dead room에 한 번의 emit 호출로 메시지 브로드캐스트
+      // this.server.to(`${data.roomId}_dead`).emit(RoomEvents.CHAT_DEAD, {
+      //   sender: sender.id,
+      //   message: data.message,
+      // });
 
       // 죽은 플레이어들만 필터링합니다.
       const deadPlayers = await this.gameService.getDead(data.roomId, gameId);
