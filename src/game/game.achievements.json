@@ -2,25 +2,25 @@
   "achievements": [
     {
       "id": 1,
-      "name": "첫 마피아 처형",
-      "description": "게임에서 첫 번째 마피아를 처형하세요.",
+      "name": "명추리",
+      "description": "투표로 마피아를 1회 잡아내세요.",
       "criteria": {
         "action": "citizen_execute_mafia",
         "count": 1
       },
       "reward": {
         "points": 10,
-        "badge": "beginner_mafia_hunter"
+        "badge": "detective"
       },
       "achieved": false
     },
     {
       "id": 2,
       "name": "연설가",
-      "description": "최후의 변론으로 처형을 1회 면하세요.",
+      "description": "심판대에 오른 뒤 최후 변론으로 처형을 1회 면하세요.",
       "criteria": {
-        "action": "player_survive_vote",
-        "count": 10
+        "action": "player_vote_survive",
+        "count": 1
       },
       "reward": {
         "points": 50,
@@ -30,15 +30,15 @@
     },
     {
       "id": 3,
-      "name": "연속 3번 마피아 역할",
-      "description": "연속 3번 마피아 역할을 맡으세요.",
+      "name": "모략가",
+      "description": "마피아로서 선동해서 투표로 시민을 1회 쟙으세요.",
       "criteria": {
-        "action": "mafia_hunt",
-        "count": 3
+        "action": "mafia_incite",
+        "count": 1
       },
       "reward": {
         "points": 30,
-        "badge": "mafia_master"
+        "badge": "schemer"
       },
       "achieved": false
     },
@@ -53,6 +53,20 @@
       "reward": {
         "points": 30,
         "badge": "doctor_master"
+      },
+      "achieved": false
+    },
+    {
+      "id": 5,
+      "name": "밤이 되었습니다",
+      "description": "마피아로서 시민을 1회 총살하세요.",
+      "criteria": {
+        "action": "mafia_hunt",
+        "count": 1
+      },
+      "reward": {
+        "points": 30,
+        "badge": "mafia_master"
       },
       "achieved": false
     }
