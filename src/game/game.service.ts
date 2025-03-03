@@ -5,12 +5,15 @@ import {
   Logger,
   forwardRef,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { TimerService } from 'src/timer/timer.service';
 import { NightResultService } from 'src/notice/night-result.service';
 import { RoomGateway } from 'src/room/room.gateway';
 import { Server, Socket, RemoteSocket } from 'socket.io';
+import { Achievements } from './models/achievements.model';
 
 // 투표, 플레이어 인터페이스 정의
 export interface FirstVote {
@@ -40,10 +43,13 @@ export class GameService {
     private readonly nightResultService: NightResultService, //
     @Inject(forwardRef(() => RoomGateway))
     private readonly roomGateway: RoomGateway,
-  ) {}
+    private achievements: Achievements[],
+  ) {
+    this.loadAchievements();
+  }
 
   // ──────────────────────────────
-  // 유틸리티 메서드 (게임 ID 및 데이터 조회)
+  // 유틸리티 메서드 (게임 ID 및 데이터, 업적 조회)
   // ──────────────────────────────
 
   // 현재 진행 중인 게임 ID 조회
@@ -75,6 +81,18 @@ export class GameService {
     }
     gameData.players = gameData.players ? JSON.parse(gameData.players) : [];
     return gameData;
+  }
+
+  //업적 조회
+  private loadAchievements() {
+    const filePath = path.join(__dirname, 'achievements.json');
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    this.achievements = JSON.parse(fileContent);
+  }
+
+  public getAchievements(): Achievements[] {
+    // 반환 타입 지정
+    return this.achievements;
   }
 
   // ──────────────────────────────
@@ -254,6 +272,16 @@ export class GameService {
     // 🔹 데이터 확인을 위해 사망자 목록 가져오기
     const deadPlayers = updatedPlayers.filter((player) => !player.isAlive);
     console.log(`사망 처리 후 사망자 목록:`, deadPlayers);
+  }
+
+  //업적 해금
+  public checkAchievement(action: string): void {
+    this.achievements.forEach((achievement) => {
+      if (achievement.criteria.action === action) {
+        // 조건 체크 및 achieved 업데이트 로직
+        achievement.achieved = true; // 예시
+      }
+    });
   }
 
   // ──────────────────────────────

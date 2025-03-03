@@ -1,0 +1,60 @@
+{
+  "achievements": [
+    {
+      "id": 1,
+      "name": "첫 마피아 처형",
+      "description": "게임에서 첫 번째 마피아를 처형하세요.",
+      "criteria": {
+        "action": "citizen_execute_mafia",
+        "count": 1
+      },
+      "reward": {
+        "points": 10,
+        "badge": "beginner_mafia_hunter"
+      },
+      "achieved": false
+    },
+    {
+      "id": 2,
+      "name": "연설가",
+      "description": "최후의 변론으로 처형을 1회 면하세요.",
+      "criteria": {
+        "action": "player_survive_vote",
+        "count": 10
+      },
+      "reward": {
+        "points": 50,
+        "badge": "speaker"
+      },
+      "achieved": false
+    },
+    {
+      "id": 3,
+      "name": "연속 3번 마피아 역할",
+      "description": "연속 3번 마피아 역할을 맡으세요.",
+      "criteria": {
+        "action": "mafia_hunt",
+        "count": 3
+      },
+      "reward": {
+        "points": 30,
+        "badge": "mafia_master"
+      },
+      "achieved": false
+    },
+    {
+      "id": 4,
+      "name": "허준",
+      "description": "의사로서 마피아로부터 공격을 1회 보호하세요.",
+      "criteria": {
+        "action": "doctor_protect",
+        "count": 3
+      },
+      "reward": {
+        "points": 30,
+        "badge": "doctor_master"
+      },
+      "achieved": false
+    }
+  ]
+}
