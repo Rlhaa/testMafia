@@ -37,8 +37,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     private readonly timerService: TimerService,
     @Inject(forwardRef(() => NightResultService))
     private readonly nightResultService: NightResultService,
-  ) {}
-
+    ) { }
   // ──────────────────────────────
   // 게임 정보 받아오기 (게임 아이디, 데이터, 발신자 정보)
   // ──────────────────────────────
