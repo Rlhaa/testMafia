@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>업적 확인</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      h1 {
+        text-align: center;
+      }
+      .achievement {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 10px 0;
+      }
+      .achieved {
+        color: green;
+      }
+      .not-achieved {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>업적 목록</h1>
+    <div id="achievements-container"></div>
+
+    <script>
+      const achievements = [
+        {
+          id: 1,
+          name: '첫 마피아 처형',
+          description: '게임에서 첫 번째 마피아를 처형하세요.',
+          criteria: { action: 'execute_mafia', count: 1 },
+          reward: { points: 10, badge: 'beginner_mafia_hunter' },
+          achieved: false,
+        },
+        {
+          id: 2,
+          name: '10번 생존',
+          description: '10번 게임에서 생존하세요.',
+          criteria: { action: 'survive', count: 10 },
+          reward: { points: 50, badge: 'survivor' },
+          achieved: false,
+        },
+        {
+          id: 3,
+          name: '연속 3번 마피아 역할',
+          description: '연속 3번 마피아 역할을 맡으세요.',
+          criteria: { action: 'role_mafia', count: 3 },
+          reward: { points: 30, badge: 'mafia_master' },
+          achieved: false,
+        },
+      ];
+
+      const container = document.getElementById('achievements-container');
+      achievements.forEach((achievement) => {
+        const div = document.createElement('div');
+        div.className = 'achievement';
+        div.innerHTML = `
+                <h3>${achievement.name}</h3>
+                <p>${achievement.description}</p>
+                <p>달성 여부: <span class="${achievement.achieved ? 'achieved' : 'not-achieved'}">${achievement.achieved ? '달성' : '미달성'}</span></p>
+            `;
+        container.appendChild(div);
+      });
+    </script>
+  </body>
+</html>
