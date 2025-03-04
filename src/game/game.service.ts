@@ -579,19 +579,30 @@ export class GameService {
       })),
     };
 
+    // 최종 게임 결과 반환
+    const gameResult = {
+      roomId,
+      gameId,
+      winningTeam,
+      finalState,
+      timestamp: new Date().toISOString(),
+    };
+
+    await this.redisClient.set(
+      `gameResult:${gameId}`,
+      JSON.stringify(gameResult),
+      'EX',
+      86400,
+    ); // 24시간 유지
+
+    //  Redis Pub/Sub을 통해 로그인 서버로 결과 전송
+    await this.redisClient.publish('gameResults', JSON.stringify(gameResult));
+
     // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
     await this.redisClient.del(gameKey);
     await this.redisClient.del(`room:${roomId}:currentGameId`);
 
-    // 최종 게임 결과 반환
-    const result = {
-      roomId,
-      winningTeam,
-      finalState,
-      message: `게임 종료: ${winningTeam === 'mafia' ? '마피아' : '시민'} 승리!`,
-    };
-
-    return result;
+    return gameResult;
   }
 
   /// 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
