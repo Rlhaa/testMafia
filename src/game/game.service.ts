@@ -31,6 +31,7 @@ export interface Player {
 
 @Injectable()
 export class GameService {
+  achievements = new Array(7).fill(false); // 임시 업적 확인 변수
   private readonly logger = new Logger(GameService.name); //타이머 로그용 임시 추가
   constructor(
     @Inject('REDIS_CLIENT')
@@ -196,6 +197,7 @@ export class GameService {
       this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
 
+    this.achievements[0] = true
     return currentDay;
   }
 
@@ -598,6 +600,7 @@ export class GameService {
 
     const multi = this.redisClient.multi();
     multi.set(gameResultKey, JSON.stringify(gameResult), 'EX', 86400); // 24시간 유지
+    multi.publish('achievements', JSON.stringify(this.achievements)); // Redis Pub/Sub 전송
     multi.publish('gameResults', JSON.stringify(gameResult)); // Redis Pub/Sub 전송
     await multi.exec(); // 트랜잭션 실행
 
