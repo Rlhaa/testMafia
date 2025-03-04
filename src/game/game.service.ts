@@ -546,6 +546,7 @@ export class GameService {
 
     // Redis에서 게임 데이터를 저장하는 키 생성
     const gameKey = `room:${roomId}:game:${gameId}`;
+    const gameResultKey = `gameResult:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
 
     // 게임에 참여한 플레이어 목록 가져오기
@@ -579,7 +580,14 @@ export class GameService {
       })),
     };
 
-    // 최종 게임 결과 반환
+    // **이미 저장된 게임 결과인지 확인 (중복 방지)**
+    const isAlreadyStored = await this.redisClient.exists(gameResultKey);
+    if (isAlreadyStored) {
+      console.warn(`이미 저장된 게임 결과 (gameId: ${gameId}), 저장 안 함.`);
+      return;
+    }
+
+    // **Redis 트랜잭션을 사용하여 중복 방지 및 저장**
     const gameResult = {
       roomId,
       gameId,
@@ -588,15 +596,12 @@ export class GameService {
       timestamp: new Date().toISOString(),
     };
 
-    await this.redisClient.set(
-      `gameResult:${gameId}`,
-      JSON.stringify(gameResult),
-      'EX',
-      86400,
-    ); // 24시간 유지
+    const multi = this.redisClient.multi();
+    multi.set(gameResultKey, JSON.stringify(gameResult), 'EX', 86400); // 24시간 유지
+    multi.publish('gameResults', JSON.stringify(gameResult)); // Redis Pub/Sub 전송
+    await multi.exec(); // 트랜잭션 실행
 
-    //  Redis Pub/Sub을 통해 로그인 서버로 결과 전송
-    await this.redisClient.publish('gameResults', JSON.stringify(gameResult));
+    console.log(`게임 결과가 저장됨 (gameId: ${gameId})`);
 
     // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
     await this.redisClient.del(gameKey);
