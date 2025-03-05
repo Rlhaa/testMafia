@@ -1,14 +1,15 @@
-// src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { RedisIoAdapter } from './redis.adapter'; 
+import { RedisIoAdapter } from './redis.adapter';
+import { RedisProvider } from 'src/redis/redis.provider';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.useWebSocketAdapter(new RedisIoAdapter(app))
+  // Redis 클라이언트 주입
+  const redisClient = RedisProvider.useFactory();
+  app.useWebSocketAdapter(new RedisIoAdapter(redisClient));
 
   await app.listen(3000);
-  console.log('서버가 http://localhost:3000 에서 실행 중입니다.');
 }
 bootstrap();
