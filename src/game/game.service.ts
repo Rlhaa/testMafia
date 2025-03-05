@@ -547,6 +547,7 @@ export class GameService {
     // Redis에서 게임 데이터를 저장하는 키 생성
     const gameKey = `room:${roomId}:game:${gameId}`;
     const gameResultKey = `gameResult:${gameId}`;
+    const gameAchievementsKey = `gameAchievements:${gameId}`; //  게임 업적 저장용 Redis 키
     const gameData = await this.getGameData(roomId, gameId);
 
     // 게임에 참여한 플레이어 목록 가져오기
@@ -587,7 +588,22 @@ export class GameService {
       return;
     }
 
-    // **Redis 트랜잭션을 사용하여 중복 방지 및 저장**
+    //  **유저별 능력 사용 데이터 조회 (업적 시스템과 연동)**
+    const playerStats = {};
+    for (const player of players) {
+      const stats = await this.redisClient.hgetall(`user:${player.id}:stats`);
+      playerStats[player.id] = stats;
+    }
+
+    //  **게임 업적 데이터 구성**
+    const gameAchievements = {
+      roomId,
+      gameId,
+      playerAchievements: playerStats, // 🔥 유저별 능력 사용 데이터 포함
+      timestamp: new Date().toISOString(),
+    };
+
+    // **Redis 트랜잭션을 사용하여 게임 결과 및 업적 저장**
     const gameResult = {
       roomId,
       gameId,
@@ -599,9 +615,20 @@ export class GameService {
     const multi = this.redisClient.multi();
     multi.set(gameResultKey, JSON.stringify(gameResult), 'EX', 86400); // 24시간 유지
     multi.publish('gameResults', JSON.stringify(gameResult)); // Redis Pub/Sub 전송
+
+    //  **게임 업적 저장 & Pub/Sub 전송**
+    multi.set(
+      gameAchievementsKey,
+      JSON.stringify(gameAchievements),
+      'EX',
+      86400,
+    );
+    multi.publish('gameAchievements', JSON.stringify(gameAchievements));
+
     await multi.exec(); // 트랜잭션 실행
 
     console.log(`게임 결과가 저장됨 (gameId: ${gameId})`);
+    console.log(`게임 업적이 저장됨 (gameId: ${gameId})`);
 
     // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
     await this.redisClient.del(gameKey);
@@ -893,6 +920,9 @@ export class GameService {
       JSON.stringify(mafiaTargets),
     );
 
+    //  마피아 능력 사용 횟수 저장 (Redis 증가)
+    await this.redisClient.hincrby(`user:${userId}:stats`, 'mafia_kills', 1);
+
     console.log(`🔫 마피아(${userId})가 ${targetUserId}를 대상으로 선택함.`);
   }
 
@@ -908,6 +938,16 @@ export class GameService {
       'policeTarget',
       targetUserId.toString(),
     );
+
+    //  경찰 능력 사용 횟수 저장 (Redis 증가)
+    const policeId = await this.getPlayerByRole(roomId, 'police');
+    if (policeId) {
+      await this.redisClient.hincrby(
+        `user:${policeId}:stats`,
+        'detective_checks',
+        1,
+      );
+    }
   }
 
   // 의사가 지목하는 함수
@@ -922,6 +962,12 @@ export class GameService {
       'doctorTarget',
       targetUserId.toString(),
     );
+
+    //  의사 능력 사용 횟수 저장 (Redis 증가)
+    const doctorId = await this.getPlayerByRole(roomId, 'doctor');
+    if (doctorId) {
+      await this.redisClient.hincrby(`user:${doctorId}:stats`, 'heal_used', 1);
+    }
   }
 
   // 밤 결과 처리 함수
