@@ -19,6 +19,8 @@ import { TimerModule } from './timer/timer.module';
     TimerModule,
   ],
   controllers: [],
-  providers: [TimerService],
+  providers: [
+    TimerService,
+  ],
 })
 export class AppModule {}

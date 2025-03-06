@@ -205,7 +205,7 @@ export class GameService {
     this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
       this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
     });
-
+    
     return currentDay;
   }
 

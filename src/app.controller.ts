@@ -7,6 +7,6 @@ export class AppController {
 
   @Get()
   getHello(): string {
-    return this.appService.getHello();
+    throw new Error('Test Sentry Error'); // 실제 오류 발생
   }
 }
