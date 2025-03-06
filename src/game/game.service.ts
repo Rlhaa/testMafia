@@ -192,8 +192,18 @@ export class GameService {
       sender: 'system',
       message: `Day ${currentDay} 낮이 밝았습니다!`,
     });
-    this.timerService.startTimer(roomId, 'day', 120000).subscribe(() => {
-      this.roomGateway.announceFirstVoteStart(roomId, currentDay); //2번째 인자, 3번째 인자? 전달받기 CHAN
+    let phase = 'day';
+    this.timerService.startTimer(roomId, 'day', 120000).subscribe({
+      next: (remainingTime) => {
+        // 1초마다 실행되는 시간이벤트
+        let data = { timerTime: remainingTime, phase };
+        server.to(roomId).emit('updateTimer', data);
+      },
+      complete: () => {
+        if (this.timerService.getTimerCompleted(roomId, phase)) {
+          this.roomGateway.announceFirstVoteStart(roomId, currentDay);
+        }
+      },
     });
 
     return currentDay;
@@ -319,7 +329,7 @@ export class GameService {
     const firstVoteKey = `room:${roomId}:game:${gameId}:firstVote`;
     const votes = await this.redisClient.get(firstVoteKey);
     if (!votes) {
-      return { winnerId: null, voteCount: 0, tie: false, tieCandidates: [] };
+      return { winnerId: null, voteCount: 0, tie: true, tieCandidates: [] };
     }
     const voteArray: { voterId: number; targetId: number }[] =
       JSON.parse(votes);
@@ -634,9 +644,19 @@ export class GameService {
     console.log(
       `✅ 방 ${roomId} - NIGHT ${nightNumber} 시작됨. 마피아 수: ${mafias.length}, 사망자 수: ${dead.length}`,
     );
+    let phase = 'night';
     await this.clearDayVote(roomId);
-    this.timerService.startTimer(roomId, 'night', 300000).subscribe(() => {
-      this.triggerNightProcessing(server, roomId); //2번째 인자, 3번째 인자? 전달받기 CHAN
+    this.timerService.startTimer(roomId, 'night', 300000).subscribe({
+      next: (remainingTime) => {
+        // 1초마다 실행되는 시간이벤트
+        let data = { timerTime: remainingTime, phase };
+        server.to(roomId).emit('updateTimer', data);
+      },
+      complete: () => {
+        if (this.timerService.getTimerCompleted(roomId, phase)) {
+          this.triggerNightProcessing(server, roomId); //2번째 인자, 3번째 인자? 전달받기 CHAN
+        }
+      },
     });
     return { nightNumber, mafias, dead };
   }

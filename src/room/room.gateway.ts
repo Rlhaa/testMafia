@@ -322,7 +322,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         voterId: data.voterId,
       });
       if (result.allVotesCompleted) {
-        this.timerService.cancelTimer(data.roomId, 'secondVoteTimer');
+        this.timerService.cancelTimer(data.roomId, 'secondVote');
         await this.finalizeSecondVote(data.roomId);
       }
     } catch (error) {
@@ -350,14 +350,21 @@ export class RoomGateway implements OnGatewayDisconnect {
     dayNumber: number,
   ): Promise<void> {
     this.nightResultService.announceFirstVoteStart(roomId, dayNumber);
-
+    let phase = 'firstVote';
     // 15초 후 자동으로 투표 마감
-    this.timerService
-      .startTimer(roomId, 'firstVoteTimer', 15000)
-      .subscribe(async () => {
-        console.log('1차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
-        await this.finalizeFirstVote(roomId);
-      });
+    this.timerService.startTimer(roomId, 'firstVote', 15000).subscribe({
+      next: (remainingTime) => {
+        // 1초마다 실행되는 시간이벤트
+        let data = { timerTime: remainingTime, phase };
+        this.server.to(roomId).emit('updateTimer', data);
+      },
+      complete: async () => {
+        if (this.timerService.getTimerCompleted(roomId, phase)) {
+          console.log('1차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
+          await this.finalizeFirstVote(roomId);
+        }
+      },
+    });
   }
 
   private async finalizeFirstVote(roomId: string) {
@@ -412,14 +419,21 @@ export class RoomGateway implements OnGatewayDisconnect {
     dayNumber: number,
   ): Promise<void> {
     this.nightResultService.announceSecondVoteStart(roomId, dayNumber);
-
+    let phase = 'secondVote';
     // 45초 후 자동으로 투표 마감
-    this.timerService
-      .startTimer(roomId, 'secondVoteTimer', 45000)
-      .subscribe(async () => {
-        console.log('2차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
-        await this.finalizeSecondVote(roomId);
-      });
+    this.timerService.startTimer(roomId, 'secondVote', 45000).subscribe({
+      next: (remainingTime) => {
+        // 1초마다 실행되는 시간이벤트
+        let data = { timerTime: remainingTime, phase };
+        this.server.to(roomId).emit('updateTimer', data);
+      },
+      complete: async () => {
+        if (this.timerService.getTimerCompleted(roomId, phase)) {
+          console.log('2차 투표 시간이 만료되었습니다. 결과를 계산합니다.');
+          await this.finalizeSecondVote(roomId);
+        }
+      },
+    });
   }
 
   private async finalizeSecondVote(roomId: string) {
@@ -428,7 +442,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       const finalResult =
         await this.gameService.calculateSecondVoteResult(roomId);
       console.log('투표 결과 계산 완료:', finalResult);
-      this.timerService.cancelTimer(roomId, 'secondVoteTimer');
+      this.timerService.cancelTimer(roomId, 'secondVote');
       let nightSignalSent = false; // 밤 시작 신호 전송 여부
 
       if (finalResult.tie) {
