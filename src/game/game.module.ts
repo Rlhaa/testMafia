@@ -6,6 +6,7 @@ import { RoomService } from 'src/room/room.service';
 import { RoomModule } from 'src/room/room.module';
 import { NoticeModule } from 'src/notice/notice.module'; // NoticeModule 임포트
 import { TimerModule } from 'src/timer/timer.module';
+import { GameController } from './game.controller';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { TimerModule } from 'src/timer/timer.module';
     forwardRef(() => NoticeModule),
     TimerModule,
   ],
+  controllers: [GameController],
   providers: [GameService, RedisProvider, RoomService], // NightResultService 제거
   exports: [GameService],
 })

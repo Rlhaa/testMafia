@@ -7,18 +7,20 @@ import { RoomModule } from './room/room.module';
 import { NoticeModule } from './notice/notice.module';
 import { TimerService } from './timer/timer.service';
 import { TimerModule } from './timer/timer.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
-    }),
+    // ServeStaticModule.forRoot({
+    //   rootPath: join(__dirname, '..', 'public'),
+    // }),
     GameModule,
     RoomModule,
     NoticeModule,
     TimerModule,
   ],
-  controllers: [],
-  providers: [TimerService],
+  controllers: [AppController],
+  providers: [AppService, TimerService],
 })
 export class AppModule {}

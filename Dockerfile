@@ -1,14 +1,21 @@
-# app/Dockerfile
-FROM node:18
+# 1. Node.js 베이스 이미지 선택
+FROM node:18-alpine
 
-RUN mkdir -p /var/app
-WORKDIR /var/app
+# 2. 작업 디렉토리 설정
+WORKDIR /app
 
-# 소스 전체를 복사 (필요에 따라 .dockerignore로 불필요 파일 제거)
+# 3. package.json 복사 및 전체 패키지 설치
+COPY package*.json ./
+RUN npm install  # --only=production 제거
+
+# 4. 소스 코드 복사
 COPY . .
 
-RUN npm install
+# 5. NestJS 빌드 실행 (dist 폴더 생성됨)
 RUN npm run build
 
-EXPOSE 3000
-CMD [ "node", "dist/main.js" ]
+# 6. 포트 설정 (NestJS 기본 3000)
+EXPOSE 3001
+
+# 7. 실행 명령어
+CMD ["node", "dist/main"]
