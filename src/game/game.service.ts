@@ -572,6 +572,9 @@ export class GameService {
     // Lock 설정 (게임 종료가 실행 중임을 표시)
     await this.redisClient.set(gameLockKey, 'locked');
 
+    let winningTeam = '';
+    let winningMessage = '';
+
     try {
       const gameData = await this.getGameData(roomId, gameId);
       const players: Player[] = gameData.players;
@@ -584,8 +587,6 @@ export class GameService {
         (player) => player.role !== 'mafia' && player.isAlive,
       ).length;
 
-      let winningTeam = '';
-
       if (aliveMafias >= aliveCitizens) {
         winningTeam = 'mafia';
       } else if (aliveMafias === 0) {
@@ -593,6 +594,9 @@ export class GameService {
       } else {
         return { message: '게임이 아직 끝나지 않았습니다.' };
       }
+
+      //  메시지 설정
+      winningMessage = winningTeam === 'mafia' ? '마피아 승리' : '시민 승리';
 
       // **이미 저장된 게임 결과인지 확인 (중복 방지)**
       const isAlreadyStored = await this.redisClient.exists(gameResultKey);
@@ -649,6 +653,7 @@ export class GameService {
 
       await multi.exec();
 
+      console.log(`✅ 게임 종료: ${winningMessage} (gameId: ${gameId})`);
       console.log(`게임 결과가 저장됨 (gameId: ${gameId})`);
       console.log(`게임 업적이 저장됨 (gameId: ${gameId})`);
 
@@ -660,7 +665,12 @@ export class GameService {
       await this.redisClient.del(gameLockKey);
     }
 
-    return { message: '게임 종료 처리 완료' };
+    //  최종 반환 메시지 (변수 접근 가능)
+    return {
+      message: winningMessage, // "마피아 승리" 또는 "시민 승리"
+      winningTeam, // "mafia" 또는 "citizens"
+      isGameOver: true,
+    };
   }
 
   /// 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
