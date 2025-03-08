@@ -9,6 +9,7 @@ import { TimerService } from './timer/timer.service';
 import { TimerModule } from './timer/timer.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisProvider } from './redis/redis.provider';
 
 @Module({
   imports: [
@@ -21,6 +22,6 @@ import { AppService } from './app.service';
     TimerModule,
   ],
   controllers: [AppController],
-  providers: [AppService, TimerService],
+  providers: [AppService, TimerService, RedisProvider],
 })
 export class AppModule {}

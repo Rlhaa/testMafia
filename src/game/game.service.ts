@@ -129,6 +129,7 @@ export class GameService {
 
   // 역할 분배
   async assignRoles(roomId: string, gameId: string): Promise<Player[]> {
+    this.redisClient.hset(`room:${roomId}`, 'status', '게임 중');
     const redisKey = `room:${roomId}:game:${gameId}`;
     const gameData = await this.getGameData(roomId, gameId);
     const players: Player[] = gameData.players;
@@ -205,7 +206,6 @@ export class GameService {
         }
       },
     });
-
     return currentDay;
   }
 
@@ -643,7 +643,7 @@ export class GameService {
     // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
     await this.redisClient.del(gameKey);
     await this.redisClient.del(`room:${roomId}:currentGameId`);
-
+    this.redisClient.hset(`room:${roomId}`, 'status', '대기 중');
     return gameResult;
   }
 

@@ -224,8 +224,8 @@ export class RoomService {
     // 방 인원이 8명이면 게임 자동 시작 타이머 설정
     const sockets = await server.in(roomId).allSockets();
     if (
-      sockets.size === 8 &&
-      !this.timerService.hasTimer(roomId, 'gamestart')
+      sockets.size === 8
+      //  && !this.timerService.hasTimer(roomId, 'gamestart')
     ) {
       // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
       this.nightResultService.announceRoomFull(roomId);
@@ -260,10 +260,16 @@ export class RoomService {
 
     // 인원이 8명 미만이면 진행 중인 게임 시작 타이머 취소
     const sockets = await server.in(roomId).allSockets();
-    if (sockets.size < 8 && this.timerService.hasTimer(roomId, 'gamestart')) {
+    if (
+      sockets.size < 8 &&
+      (await this.timerService.hasTimer(roomId, 'gamestart'))
+    ) {
       this.timerService.cancelTimer(roomId, 'gamestart');
       // [수정] 타이머 취소 공지: 기존 sendSystemMessage 대신 NightResultService의 announceCancelTimer 호출
       this.nightResultService.announceCancelTimer(roomId);
+    }
+    if (sockets.size === 0) {
+      this.redisClient.del(`room:${roomId}`);
     }
   }
 }
