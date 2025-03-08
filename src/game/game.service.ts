@@ -557,94 +557,121 @@ export class GameService {
     // Redis에서 게임 데이터를 저장하는 키 생성
     const gameKey = `room:${roomId}:game:${gameId}`;
     const gameResultKey = `gameResult:${gameId}`;
-    const gameAchievementsKey = `gameAchievements:${gameId}`; //  게임 업적 저장용 Redis 키
-    const gameData = await this.getGameData(roomId, gameId);
+    const gameAchievementsKey = `gameAchievements:${gameId}`;
+    const gameLockKey = `lock:endGame:${roomId}`; // 중복 실행 방지용 Redis Lock 키
 
-    // 게임에 참여한 플레이어 목록 가져오기
-    const players: Player[] = gameData.players;
-
-    // 생존한 마피아와 시민 수 카운트
-    const aliveMafias = players.filter(
-      (player) => player.role === 'mafia' && player.isAlive,
-    ).length;
-    const aliveCitizens = players.filter(
-      (player) => player.role !== 'mafia' && player.isAlive,
-    ).length;
-
-    let winningTeam = ''; // 최종 승리 팀 저장 변수
-
-    // 게임 종료 조건 판단
-    if (aliveMafias >= aliveCitizens) {
-      winningTeam = 'mafia'; // 마피아 수가 시민 이상이면 마피아 승리
-    } else if (aliveMafias === 0) {
-      winningTeam = 'citizens'; // 마피아가 모두 죽으면 시민 승리
-    } else {
-      return { message: '게임이 아직 끝나지 않았습니다.' }; // 아직 게임 종료 조건을 충족하지 않음
-    }
-
-    // 최종 게임 상태 데이터 구성 (각 플레이어의 역할 및 생존 여부 포함)
-    const finalState = {
-      players: players.map((player) => ({
-        userId: player.id,
-        role: player.role,
-        alive: player.isAlive,
-      })),
-    };
-
-    // **이미 저장된 게임 결과인지 확인 (중복 방지)**
-    const isAlreadyStored = await this.redisClient.exists(gameResultKey);
-    if (isAlreadyStored) {
-      console.warn(`이미 저장된 게임 결과 (gameId: ${gameId}), 저장 안 함.`);
+    // 중복 실행 방지: Lock 확인
+    const isLocked = await this.redisClient.exists(gameLockKey);
+    if (isLocked) {
+      console.warn(
+        `게임 종료가 이미 진행 중 (roomId: ${roomId}), 중복 실행 방지.`,
+      );
       return;
     }
 
-    //  **유저별 능력 사용 데이터 조회 (업적 시스템과 연동)**
-    const playerStats = {};
-    for (const player of players) {
-      const stats = await this.redisClient.hgetall(`user:${player.id}:stats`);
-      playerStats[player.id] = stats;
+    // Lock 설정 (게임 종료가 실행 중임을 표시)
+    await this.redisClient.set(gameLockKey, 'locked');
+
+    let winningTeam = '';
+    let winningMessage = '';
+
+    try {
+      const gameData = await this.getGameData(roomId, gameId);
+      const players: Player[] = gameData.players;
+
+      // 생존한 마피아와 시민 수 카운트
+      const aliveMafias = players.filter(
+        (player) => player.role === 'mafia' && player.isAlive,
+      ).length;
+      const aliveCitizens = players.filter(
+        (player) => player.role !== 'mafia' && player.isAlive,
+      ).length;
+
+      if (aliveMafias >= aliveCitizens) {
+        winningTeam = 'mafia';
+      } else if (aliveMafias === 0) {
+        winningTeam = 'citizens';
+      } else {
+        return { message: '게임이 아직 끝나지 않았습니다.' };
+      }
+
+      //  메시지 설정
+      winningMessage = winningTeam === 'mafia' ? '마피아 승리' : '시민 승리';
+
+      // **이미 저장된 게임 결과인지 확인 (중복 방지)**
+      const isAlreadyStored = await this.redisClient.exists(gameResultKey);
+      if (isAlreadyStored) {
+        console.warn(`이미 저장된 게임 결과 (gameId: ${gameId}), 저장 안 함.`);
+        return;
+      }
+
+      // 최종 게임 상태 데이터 구성
+      const finalState = {
+        players: players.map((player) => ({
+          userId: player.id,
+          role: player.role,
+          alive: player.isAlive,
+        })),
+      };
+
+      // 유저별 능력 사용 데이터 조회
+      const playerStats = {};
+      for (const player of players) {
+        const stats = await this.redisClient.hgetall(`user:${player.id}:stats`);
+        playerStats[player.id] = stats;
+      }
+
+      // 게임 업적 데이터 구성
+      const gameAchievements = {
+        roomId,
+        gameId,
+        playerAchievements: playerStats,
+        timestamp: new Date().toISOString(),
+      };
+
+      // 게임 결과 데이터 구성
+      const gameResult = {
+        roomId,
+        gameId,
+        winningTeam,
+        finalState,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Redis 트랜잭션을 사용하여 게임 결과 및 업적 저장
+      const multi = this.redisClient.multi();
+      multi.set(gameResultKey, JSON.stringify(gameResult), 'EX', 86400);
+      multi.publish('gameResults', JSON.stringify(gameResult));
+
+      multi.set(
+        gameAchievementsKey,
+        JSON.stringify(gameAchievements),
+        'EX',
+        86400,
+      );
+      multi.publish('gameAchievements', JSON.stringify(gameAchievements));
+
+      await multi.exec();
+
+      console.log(`✅ 게임 종료: ${winningMessage} (gameId: ${gameId})`);
+      console.log(`게임 결과가 저장됨 (gameId: ${gameId})`);
+      console.log(`게임 업적이 저장됨 (gameId: ${gameId})`);
+
+      // 게임 데이터 삭제
+      await this.redisClient.del(gameKey);
+      await this.redisClient.del(`room:${roomId}:currentGameId`);
+      await this.redisClient.hset(`room:${roomId}`, 'status', '대기 중');
+    } finally {
+      // 실행이 끝나면 lock 해제
+      await this.redisClient.del(gameLockKey);
     }
 
-    //  **게임 업적 데이터 구성**
-    const gameAchievements = {
-      roomId,
-      gameId,
-      playerAchievements: playerStats, // 🔥 유저별 능력 사용 데이터 포함
-      timestamp: new Date().toISOString(),
+    //  최종 반환 메시지 (변수 접근 가능)
+    return {
+      message: winningMessage, // "마피아 승리" 또는 "시민 승리"
+      winningTeam, // "mafia" 또는 "citizens"
+      isGameOver: true,
     };
-
-    // **Redis 트랜잭션을 사용하여 게임 결과 및 업적 저장**
-    const gameResult = {
-      roomId,
-      gameId,
-      winningTeam,
-      finalState,
-      timestamp: new Date().toISOString(),
-    };
-
-    const multi = this.redisClient.multi();
-    multi.set(gameResultKey, JSON.stringify(gameResult), 'EX', 86400); // 24시간 유지
-    multi.publish('gameResults', JSON.stringify(gameResult)); // Redis Pub/Sub 전송
-
-    //  **게임 업적 저장 & Pub/Sub 전송**
-    multi.set(
-      gameAchievementsKey,
-      JSON.stringify(gameAchievements),
-      'EX',
-      86400,
-    );
-    multi.publish('gameAchievements', JSON.stringify(gameAchievements));
-
-    await multi.exec(); // 트랜잭션 실행
-
-    console.log(`게임 결과가 저장됨 (gameId: ${gameId})`);
-    console.log(`게임 업적이 저장됨 (gameId: ${gameId})`);
-
-    // Redis에서 게임 관련 데이터 삭제 (게임 종료 처리)
-    await this.redisClient.del(gameKey);
-    await this.redisClient.del(`room:${roomId}:currentGameId`);
-    this.redisClient.hset(`room:${roomId}`, 'status', '대기 중');
-    return gameResult;
   }
 
   /// 1. 특정 역할(role)을 가진 살아있는 플레이어 찾기
