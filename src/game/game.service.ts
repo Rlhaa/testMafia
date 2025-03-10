@@ -980,6 +980,14 @@ export class GameService {
       throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
     const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+    //경찰 플레이어 생존 여부 확인
+    const policePlayer = players.find((p) => p.role === 'police');
+    if (!policePlayer || !policePlayer.isAlive) {
+      throw new BadRequestException('죽은 경찰은 타겟을 지정할 수 없습니다.');
+    }
+
     await this.redisClient.hset(
       redisKey,
       'policeTarget',
@@ -1004,6 +1012,15 @@ export class GameService {
       throw new BadRequestException('현재 진행 중인 게임이 없습니다.');
 
     const redisKey = `room:${roomId}:game:${gameId}`;
+    const gameData = await this.getGameData(roomId, gameId);
+    const players: Player[] = gameData.players;
+
+    // 의사 플레이어 찾기 및 생존 여부 확인
+    const doctorPlayer = players.find((p) => p.role === 'doctor');
+    if (!doctorPlayer || !doctorPlayer.isAlive) {
+      throw new BadRequestException('죽은 의사는 타겟을 지정할 수 없습니다.');
+    }
+
     await this.redisClient.hset(
       redisKey,
       'doctorTarget',
