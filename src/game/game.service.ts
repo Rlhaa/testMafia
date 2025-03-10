@@ -194,7 +194,7 @@ export class GameService {
       message: `Day ${currentDay} 낮이 밝았습니다!`,
     });
     let phase = 'day';
-    this.timerService.startTimer(roomId, 'day', 20000).subscribe({
+    this.timerService.startTimer(roomId, 'day', 120000).subscribe({
       next: (remainingTime) => {
         // 1초마다 실행되는 시간이벤트
         let data = { timerTime: remainingTime, phase };

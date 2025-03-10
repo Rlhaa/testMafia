@@ -218,16 +218,25 @@ export class RoomService {
     // 최신 방 정보 조회 후 ROOM:UPDATED 이벤트 전송
     const roomData = await this.getRoomInfo(roomId);
     server.to(roomId).emit('ROOM:UPDATED', roomData);
-
-    // 방 인원이 8명이면 게임 자동 시작 타이머 설정
     const sockets = await server.in(roomId).allSockets();
-    if (
-      sockets.size === 8
-      //  && !this.timerService.hasTimer(roomId, 'gamestart')
-    ) {
+    if (sockets.size === 8) {
       // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
       this.nightResultService.announceRoomFull(roomId);
+      // 방 인원이 8명이면 게임 자동 시작 타이머 설정
+      this.startGame(roomId, server);
+    }
+  }
+
+  async startGame(roomId: string, server: Server) {
+    const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
+    const sockets = await server.in(roomId).allSockets();
+    if (
+      sockets.size === 8 &&
+      roomStatus !== '게임 중'
+      //  && !this.timerService.hasTimer(roomId, 'gamestart')
+    ) {
       //타이머 존재 확인 CHAN 서순 정리 / 시작공지 10초 기다리기 / 배정
+      this.nightResultService.announceGameStart(roomId);
       await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
       await this.prepareGame(server, roomId);
     }

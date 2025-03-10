@@ -725,4 +725,22 @@ export class RoomGateway implements OnGatewayDisconnect {
       console.error(`🚨 NIGHT RESULT ERROR:`, error);
     }
   }
+
+  @SubscribeMessage('startGame')
+  async handleStartGame(
+    @MessageBody() data: { roomId: string; userId: number },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    const roomData = await this.roomService.getRoomInfo(data.roomId);
+    console.log(roomData.hostId);
+    console.log(data.userId);
+    if (roomData.hostId === data.userId) {
+      this.roomService.startGame(data.roomId, this.server);
+    } else {
+      this.server.to(data.roomId).emit('message', {
+        sender: 'system',
+        message: `대기 중인 ${data.userId}유저가 시작을 요청합니다.`,
+      });
+    }
+  }
 }

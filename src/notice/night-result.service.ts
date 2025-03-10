@@ -92,7 +92,12 @@ export class NightResultService {
   }
 
   announceRoomFull(roomId: string): void {
-    const message = '방이 꽉 찼습니다. 10초 후 게임이 시작됩니다.';
+    const message = '방이 꽉 찼습니다.';
+    this.announceSystemMessage(roomId, message);
+  }
+
+  announceGameStart(roomId: string): void {
+    const message = '10초 후 게임이 시작됩니다.';
     this.announceSystemMessage(roomId, message);
   }
 
