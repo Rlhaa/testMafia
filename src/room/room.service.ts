@@ -63,6 +63,24 @@ export class RoomService {
   sendSystemMessage(server: Server, roomId: string, message: string): void {
     server.to(roomId).emit('message', { sender: 'system', message });
   }
+  // ──────────────────────────────
+  // 로비에서 사용할 방 리스트 조회
+  // ──────────────────────────────
+
+  async getRoomList(): Promise<any[]> {
+    const keys = await this.redisClient.keys('room:*'); // 모든 방 키 조회
+    const filteredRooms: any[] = [];
+    const targetCount = 8;
+
+    for (const key of keys) {
+      const roomInfo = await this.redisClient.hgetall(key); // 각 방 정보 가져오기
+      if (parseInt(roomInfo.playerCount) !== targetCount) {
+        filteredRooms.push(roomInfo); // playerCount가 8이 아닌 방 추가
+      }
+    }
+
+    return filteredRooms; // 필터링된 방 목록 반환
+  }
 
   // ──────────────────────────────
   // 방 정보 조회 및 업데이트
