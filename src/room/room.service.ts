@@ -163,9 +163,7 @@ export class RoomService {
       });
 
       //CHAN TimerService를 사용하여 게임 시작 타이머 설정
-      await this.timerService
-        .startTimer(roomId, 'gamestart', 10000)
-        .toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
+      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
       await this.gameService.startDayPhase(roomId, gameId, server);
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
@@ -230,9 +228,7 @@ export class RoomService {
       // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
       this.nightResultService.announceRoomFull(roomId);
       //타이머 존재 확인 CHAN 서순 정리 / 시작공지 10초 기다리기 / 배정
-      await this.timerService
-        .startTimer(roomId, 'gamestart', 10000)
-        .toPromise();
+      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
       await this.prepareGame(server, roomId);
     }
   }

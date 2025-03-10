@@ -11,6 +11,7 @@ import {
   catchError,
   switchMap,
   map,
+  tap,
 } from 'rxjs';
 
 @Injectable()
@@ -49,7 +50,7 @@ export class TimerService {
     const stop$ = new Subject<void>();
     this.stopSubjects.set(key, stop$);
     this.completedTimers.set(key, false); // 타이머 시작 시 완료 여부 초기화
-
+    stop$.subscribe(() => console.log(`🛑 stop$ emitted! ${key}`));
     this.setTimer(roomId, phase, duration / 1000)
       .catch((err) => {
         this.logger.error(`🚨 Redis setTimer error: ${err.message}`);
@@ -63,13 +64,12 @@ export class TimerService {
       });
 
     return interval(1000).pipe(
-      takeUntil(stop$),
-      takeUntil(timer(duration)),
+      tap(() => console.log(`⏳ Timer tick for ${key}`)), // ✅ 매 초마다 실행 확인
       switchMap(() => from(this.getRemainingTime(roomId, phase))),
       map((remainingTime) => {
-        if (remainingTime <= 0) {
-          this.stopSubjects.delete(key);
+        if (remainingTime <= 1) {
           this.completedTimers.set(key, true); // 타이머 완료 설정
+          this.stopSubjects.delete(key);
           this.logger.log(`✅ Timer expired for ${roomId} (${phase})`);
         }
         this.logger.debug(
@@ -77,6 +77,8 @@ export class TimerService {
         );
         return remainingTime;
       }),
+      takeUntil(timer(duration)),
+      takeUntil(stop$),
       catchError((err) => {
         this.logger.error(`🚨 getRemainingTime error: ${err.message}`);
         this.cancelTimer(roomId, phase);
@@ -90,7 +92,6 @@ export class TimerService {
    */
   async cancelTimer(roomId: string, phase: string) {
     const key = `${roomId}:${phase}`;
-
     // 메모리에 등록된 타이머가 있는 경우
     if (this.stopSubjects.has(key)) {
       const stopSubject = this.stopSubjects.get(key);
@@ -99,7 +100,6 @@ export class TimerService {
         stopSubject.complete();
       }
       this.stopSubjects.delete(key);
-      this.completedTimers.delete(key); // 타이머 취소 시 완료 여부 삭제
     }
 
     // 🔥 Redis에서 키 삭제
@@ -185,6 +185,8 @@ export class TimerService {
    */
   getTimerCompleted(roomId: string, phase: string): boolean {
     const key = `${roomId}:${phase}`;
-    return this.completedTimers.get(key) || false;
+    const completeKey = this.completedTimers.get(key);
+    console.log(completeKey);
+    return typeof completeKey === 'boolean' ? completeKey : false;
   }
 }
