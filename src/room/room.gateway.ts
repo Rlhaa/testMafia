@@ -569,25 +569,11 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('GET:ROOM-LIST')
   async getRoomList(
-    @MessageBody()
     @ConnectedSocket()
     client: Socket,
   ) {
     try {
-      const result = await this.gameService.processNightResult(data.roomId);
-
-      const endCheck = await this.gameService.checkEndGame(data.roomId);
-      if (endCheck.isGameOver) {
-        const endResult = await this.gameService.endGame(data.roomId);
-        this.server.to(data.roomId).emit('gameEnd', endResult);
-        return;
-      }
-
-      this.server.to(data.roomId).emit('ROOM:NIGHT_RESULT', {
-        roomId: data.roomId,
-        result,
-        message: `밤 결과: ${result.details}`,
-      });
+      const result = await this.roomService.getRoomList();
     } catch (error) {
       client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
     }
