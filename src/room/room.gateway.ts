@@ -749,6 +749,12 @@ export class RoomGateway implements OnGatewayDisconnect {
     console.log(roomData.hostId);
     console.log(data.userId);
     if (roomData.hostId == data.userId) {
+      if (await this.timerService.hasTimer(data.roomId, 'gamestart')) {
+        client.emit('message', {
+          sender: 'system',
+          message: '현재 게임을 시작하는 중 입니다.',
+        });
+      }
       this.roomService.startGame(data.roomId, this.server);
     } else {
       this.server.to(data.roomId).emit('message', {
