@@ -734,7 +734,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     const roomData = await this.roomService.getRoomInfo(data.roomId);
     console.log(roomData.hostId);
     console.log(data.userId);
-    if (roomData.hostId === data.userId) {
+    if (roomData.hostId == data.userId) {
       this.roomService.startGame(data.roomId, this.server);
     } else {
       this.server.to(data.roomId).emit('message', {
