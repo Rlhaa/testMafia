@@ -92,7 +92,7 @@ export enum RoomEvents {
    * server.to(roomId).emit(RoomEvents.VOTE_SUCCESS, {  message: '투표가 완료되었습니다.',
         voterId: data.voterId, });
    */
-  VOTE_SUCCESS = 'voteSuccess',
+  VOTE_SUCCESS = 'VOTE:SUCCESS',
   /**
    * 밤 단계 배경 업데이트 이벤트.
    * @example
@@ -133,7 +133,7 @@ export enum RoomEvents {
    * @example
    *  this.server.to(roomId).emit(RoomEvents.GAME_END, endResult);
    */
-  GAME_END = 'gameEnd',
+  GAME_END = 'GAME:END',
 
   /**
    * 밤 시작을 알리는 이벤트
