@@ -151,14 +151,9 @@ export class RoomService {
           setTimeout(() => {
             socket.emit('YOUR_ROLE', {
               message: `${player.role} 입니다!`,
-              role: player.role,
-              isAlive: player.isAlive,
               sender: player,
             });
           }, 3000);
-          socket.emit('YOUR_ROLE', {
-            role: player.role,
-          });
         }
       });
 
