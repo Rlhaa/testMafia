@@ -883,6 +883,9 @@ export class GameService {
       this.redisClient.hdel(redisKey, 'doctorTarget'),
       this.redisClient.hdel(redisKey, 'mafiaTargets'),
       this.redisClient.hdel(redisKey, 'policeTarget'),
+      this.redisClient.hdel(redisKey, 'nightAction:mafia'),
+      this.redisClient.hdel(redisKey, 'nightAction:police'),
+      this.redisClient.hdel(redisKey, 'nightAction:doctor'),
     ]);
 
     console.log(`🔄 Room ${roomId}의 밤 행동 상태가 초기화되었습니다.`);
