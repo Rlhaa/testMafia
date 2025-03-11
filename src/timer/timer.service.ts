@@ -11,7 +11,6 @@ import {
   catchError,
   switchMap,
   map,
-  tap,
 } from 'rxjs';
 
 @Injectable()
@@ -51,6 +50,7 @@ export class TimerService {
     this.stopSubjects.set(key, stop$);
     this.completedTimers.set(key, false); // 타이머 시작 시 완료 여부 초기화
     stop$.subscribe(() => console.log(`🛑 stop$ emitted! ${key}`));
+
     this.setTimer(roomId, phase, duration / 1000)
       .catch((err) => {
         this.logger.error(`🚨 Redis setTimer error: ${err.message}`);
@@ -63,15 +63,16 @@ export class TimerService {
         );
       });
 
-    return interval(1000).pipe(
+    return interval(100).pipe(
       switchMap(() => from(this.getRemainingTime(roomId, phase))),
       map((remainingTime) => {
-        if (remainingTime <= 1) {
+        if (remainingTime <= 150) {
           this.completedTimers.set(key, true); // 타이머 완료 설정
           this.stopSubjects.delete(key);
           this.logger.log(`✅ Timer expired for ${roomId} (${phase})`);
         }
-        return remainingTime;
+        var remainingTimeSec = Math.floor(remainingTime / 1000);
+        return remainingTimeSec;
       }),
       takeUntil(timer(duration)),
       takeUntil(stop$),
@@ -156,15 +157,14 @@ export class TimerService {
    */
   async getRemainingTime(roomId: string, phase: string): Promise<number> {
     const key = `timer:${roomId}:${phase}`;
-    const ttl = await this.redisClient.ttl(key);
-    this.logger.debug(`🔍 Redis TTL for ${key}: ${ttl} seconds`);
+    const ttlMs = await this.redisClient.pttl(key);
 
-    if (ttl === -2) {
+    if (ttlMs === -2) {
       this.logger.warn(`🚨 Redis key ${key} not found.`);
       return 0;
     }
 
-    return ttl > 0 ? ttl : 0;
+    return ttlMs > 0 ? ttlMs : 0;
   }
 
   /**

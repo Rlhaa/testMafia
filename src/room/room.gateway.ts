@@ -355,9 +355,9 @@ export class RoomGateway implements OnGatewayDisconnect {
     let phase = 'firstVote';
     // 15초 후 자동으로 투표 마감
     this.timerService.startTimer(roomId, 'firstVote', 15000).subscribe({
-      next: (remainingTime) => {
+      next: (remainingTimeSec) => {
         // 1초마다 실행되는 시간이벤트
-        let data = { timerTime: remainingTime, phase };
+        let data = { timerTime: remainingTimeSec, phase };
         this.server.to(roomId).emit('updateTimer', data);
       },
       complete: async () => {
@@ -424,9 +424,9 @@ export class RoomGateway implements OnGatewayDisconnect {
     let phase = 'secondVote';
     // 45초 후 자동으로 투표 마감
     this.timerService.startTimer(roomId, 'secondVote', 45000).subscribe({
-      next: (remainingTime) => {
+      next: (remainingTimeSec) => {
         // 1초마다 실행되는 시간이벤트
-        let data = { timerTime: remainingTime, phase };
+        let data = { timerTime: remainingTimeSec, phase };
         this.server.to(roomId).emit('updateTimer', data);
       },
       complete: async () => {
@@ -756,10 +756,17 @@ export class RoomGateway implements OnGatewayDisconnect {
         });
       }
       this.roomService.startGame(data.roomId, this.server);
-    } else {
+    }
+    const sockets = await this.server.in(data.roomId).allSockets();
+    if (sockets.size === 8) {
       this.server.to(data.roomId).emit('message', {
         sender: 'system',
         message: `대기 중인 ${data.userId}유저가 시작을 요청합니다.`,
+      });
+    } else {
+      client.emit('message', {
+        sender: 'system',
+        message: '현재 인원이 모이지 않았습니다.',
       });
     }
   }

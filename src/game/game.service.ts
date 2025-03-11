@@ -193,9 +193,9 @@ export class GameService {
     });
     let phase = 'day';
     this.timerService.startTimer(roomId, 'day', 120000).subscribe({
-      next: (remainingTime) => {
+      next: (remainingTimeSec) => {
         // 1초마다 실행되는 시간이벤트
-        let data = { timerTime: remainingTime, phase };
+        let data = { timerTime: remainingTimeSec, phase };
         server.to(roomId).emit('updateTimer', data);
       },
       complete: () => {
@@ -715,9 +715,9 @@ export class GameService {
     let phase = 'night';
     await this.clearDayVote(roomId);
     this.timerService.startTimer(roomId, 'night', 30000).subscribe({
-      next: (remainingTime) => {
+      next: (remainingTimeSec) => {
         // 1초마다 실행되는 시간이벤트
-        let data = { timerTime: remainingTime, phase };
+        let data = { timerTime: remainingTimeSec, phase };
         server.to(roomId).emit('updateTimer', data);
       },
       complete: () => {
