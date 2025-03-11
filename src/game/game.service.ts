@@ -775,7 +775,7 @@ export class GameService {
 
     console.log('+++++++++++++', players);
     console.log('--------------', playerId);
-    const player = players.find((p: any) => p.id === String(playerId));
+    const player = players.find((p: any) => String(p.id) === String(playerId));
     if (player)
       player.role === 'mafia' ? currentMafiaCounts-- : currentCitizenCounts--;
     player.isAlive = false;
