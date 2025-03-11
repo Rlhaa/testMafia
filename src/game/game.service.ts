@@ -184,8 +184,6 @@ export class GameService {
     currentDay += 1;
     await this.redisClient.hset(redisKey, 'day', currentDay.toString());
     await this.redisClient.hset(redisKey, 'phase', 'day');
-    await this.redisClient.hset(redisKey, 'firstVote', JSON.stringify([]));
-    await this.redisClient.hset(redisKey, 'secondVote', JSON.stringify([]));
 
     await this.clearNightActions(roomId);
     server.to(roomId).emit('VOTE:FIRST:ENABLE');
@@ -882,9 +880,9 @@ export class GameService {
 
     // 각 역할의 밤 행동 상태를 삭제
     await Promise.all([
-      this.redisClient.hdel(redisKey, 'nightAction:mafia'),
-      this.redisClient.hdel(redisKey, 'nightAction:police'),
-      this.redisClient.hdel(redisKey, 'nightAction:doctor'),
+      this.redisClient.hdel(redisKey, 'doctorTarget'),
+      this.redisClient.hdel(redisKey, 'mafiaTargets'),
+      this.redisClient.hdel(redisKey, 'policeTarget'),
     ]);
 
     console.log(`🔄 Room ${roomId}의 밤 행동 상태가 초기화되었습니다.`);
