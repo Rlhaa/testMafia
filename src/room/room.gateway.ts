@@ -566,16 +566,4 @@ export class RoomGateway implements OnGatewayDisconnect {
       client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
     }
   }
-
-  @SubscribeMessage('GET:ROOM-LIST')
-  async getRoomList(
-    @ConnectedSocket()
-    client: Socket,
-  ) {
-    try {
-      const result = await this.roomService.getRoomList();
-    } catch (error) {
-      client.emit('error', { message: '밤 결과 처리 중 오류 발생.' });
-    }
-  }
 }

@@ -224,6 +224,7 @@ export class RoomService {
     // 플레이어 추가
     try {
       await this.addPlayer(roomId, { id: userId });
+      client.emit('GET:ROOM-LIST');
     } catch (error: any) {
       client.emit('error', { message: error.message });
       return;
@@ -252,6 +253,7 @@ export class RoomService {
         .startTimer(roomId, 'gamestart', 10000)
         .toPromise();
       await this.prepareGame(server, roomId);
+      client.emit('GET:ROOM-LIST');
     }
   }
 
