@@ -64,7 +64,6 @@ export class TimerService {
       });
 
     return interval(1000).pipe(
-      tap(() => console.log(`⏳ Timer tick for ${key}`)), // ✅ 매 초마다 실행 확인
       switchMap(() => from(this.getRemainingTime(roomId, phase))),
       map((remainingTime) => {
         if (remainingTime <= 1) {
@@ -72,9 +71,6 @@ export class TimerService {
           this.stopSubjects.delete(key);
           this.logger.log(`✅ Timer expired for ${roomId} (${phase})`);
         }
-        this.logger.debug(
-          `⏰ ${roomId} (${phase}) 남은 시간: ${remainingTime}초`,
-        );
         return remainingTime;
       }),
       takeUntil(timer(duration)),

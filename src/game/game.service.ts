@@ -716,7 +716,7 @@ export class GameService {
     );
     let phase = 'night';
     await this.clearDayVote(roomId);
-    this.timerService.startTimer(roomId, 'night', 300000).subscribe({
+    this.timerService.startTimer(roomId, 'night', 30000).subscribe({
       next: (remainingTime) => {
         // 1초마다 실행되는 시간이벤트
         let data = { timerTime: remainingTime, phase };
