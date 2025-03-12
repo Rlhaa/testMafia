@@ -172,3 +172,53 @@ testMafia
 └─ tsconfig.json
 
 ```
+```
+testMafia
+├─ .prettierrc
+├─ docker-compose.yml
+├─ Dockerfile
+├─ eslint.config.mjs
+├─ nest-cli.json
+├─ package-lock.json
+├─ package.json
+├─ README.md
+├─ src
+│  ├─ app.controller.ts
+│  ├─ app.module.ts
+│  ├─ app.service.ts
+│  ├─ game
+│  │  ├─ game.controller.ts
+│  │  ├─ game.module.ts
+│  │  ├─ game.service.ts
+│  │  ├─ interfaces
+│  │  │  └─ game.interface.ts
+│  │  └─ models
+│  │     ├─ game.model.ts
+│  │     ├─ player.model.ts
+│  │     ├─ room.model.ts
+│  │     └─ vote.model.ts
+│  ├─ main.ts
+│  ├─ notice
+│  │  ├─ night-result.service.ts
+│  │  └─ notice.module.ts
+│  ├─ redis
+│  │  ├─ Dockerfile
+│  │  ├─ redis.conf
+│  │  └─ redis.provider.ts
+│  ├─ room
+│  │  ├─ room.controller.ts
+│  │  ├─ room.events.enum.ts
+│  │  ├─ room.gateway.ts
+│  │  ├─ room.module.ts
+│  │  └─ room.service.ts
+│  └─ timer
+│     ├─ timer.module.ts
+│     ├─ timer.service.spec.ts
+│     └─ timer.service.ts
+├─ test
+│  ├─ app.e2e-spec.ts
+│  └─ jest-e2e.json
+├─ tsconfig.build.json
+└─ tsconfig.json
+
+```

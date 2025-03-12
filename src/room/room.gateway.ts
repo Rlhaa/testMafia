@@ -248,11 +248,17 @@ export class RoomGateway implements OnGatewayDisconnect {
   // >> 추후 이벤트 네임 변경 할 수 있음(웹소켓 명세 따라)
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(
-    @MessageBody() data: { roomId: string; userId: number },
+    @MessageBody() data: { roomId: string; userId: number; nickName: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const { roomId, userId } = data;
-    await this.roomService.joinRoom(this.server, client, roomId, userId);
+    const { roomId, userId, nickName } = data;
+    await this.roomService.joinRoom(
+      this.server,
+      client,
+      roomId,
+      userId,
+      nickName,
+    );
   }
 
   @SubscribeMessage('leaveRoom')

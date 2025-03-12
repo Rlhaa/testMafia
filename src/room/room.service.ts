@@ -17,6 +17,7 @@ import { TimerService } from 'src/timer/timer.service';
 
 interface Player {
   id: number;
+  nickName: string;
   role?: string;
   isAlive?: boolean;
 }
@@ -106,6 +107,7 @@ export class RoomService {
 
   // 새로운 플레이어를 추가 (최대 8명, 중복 추가 방지)
   async addPlayer(roomId: string, newPlayer: Player): Promise<Player[]> {
+    console.log(newPlayer);
     const roomData = await this.getRoomInfo(roomId);
     const players: Player[] = this.parsePlayers(roomData.players);
     if (players.length >= 8) {
@@ -182,6 +184,7 @@ export class RoomService {
     client: Socket,
     roomId: string,
     userId: number,
+    nickName: string,
   ): Promise<void> {
     if (!roomId || !userId) {
       client.emit('error', { message: 'roomId와 userId가 필요합니다.' });
@@ -205,7 +208,7 @@ export class RoomService {
 
     // 플레이어 추가
     try {
-      await this.addPlayer(roomId, { id: userId });
+      await this.addPlayer(roomId, { id: userId, nickName });
     } catch (error: any) {
       client.emit('error', { message: error.message });
       return;
