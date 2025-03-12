@@ -12,7 +12,7 @@ export enum RoomEvents {
   /**
    * 채팅 메시지 전송 이벤트.
    * @example
-   * socket.emit(RoomEvents.MESSAGE, { sender: userId, message: '안녕하세요' });
+   * socket.emit(RoomEvents.MESSAGE, { sender: userId, nickName:nickName message: '안녕하세요' });
    */
   MESSAGE = 'message',
 

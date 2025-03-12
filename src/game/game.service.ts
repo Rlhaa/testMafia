@@ -187,10 +187,8 @@ export class GameService {
 
     await this.clearNightActions(roomId);
     server.to(roomId).emit('VOTE:FIRST:ENABLE');
-    server.to(roomId).emit('message', {
-      sender: 'system',
-      message: `Day ${currentDay} 낮이 밝았습니다!`,
-    });
+    const message = `Day ${currentDay} 낮이 밝았습니다!,`;
+    this.roomGateway.broadcastNotice(roomId, 'system_message', message);
     this.isNightFinalized = false;
     await this.roomGateway.resetFlag();
     let phase = 'day';

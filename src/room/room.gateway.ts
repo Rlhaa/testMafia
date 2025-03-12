@@ -87,18 +87,21 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('chatMessage')
   async handleChatMessage(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @MessageBody()
+    data: { roomId: string; userId: number; nickName: string; message: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
     // 채팅 메시지를 해당 룸의 모든 클라이언트에게 브로드캐스트
     this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
       sender: data.userId,
+      nickName: data.nickName,
       message: data.message,
     });
   }
   @SubscribeMessage('chatCitizen')
   async handleChatCitizen(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @MessageBody()
+    data: { roomId: string; userId: number; nickName: string; message: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
     const gameId = await this.getCurrentGameId(data.roomId);
@@ -108,6 +111,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     if (gameData.phase !== 'night') {
       this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
         sender: data.userId,
+        nickName: data.nickName,
         message: data.message,
       });
     } else if (gameData.phase === 'night') {
@@ -117,7 +121,8 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('chatDead')
   async handleChatDead(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @MessageBody()
+    data: { roomId: string; userId: number; nickName: string; message: string },
     @ConnectedSocket() client: Socket,
   ): Promise<void> {
     try {
@@ -138,6 +143,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         if (deadPlayerSocketId) {
           this.server.to(deadPlayerSocketId).emit(RoomEvents.CHAT_DEAD, {
             sender: sender.id,
+            nickName: data.nickName,
             message: data.message,
           });
           messageSentToDeadPlayers = true;
@@ -148,6 +154,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         if (!messageSentToDeadPlayers) {
           this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
             sender: sender.id,
+            nickName: data.nickName,
             message: data.message,
           });
         }
@@ -162,7 +169,8 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('chatMafia')
   async handleMafiaMessage(
-    @MessageBody() data: { roomId: string; userId: number; message: string },
+    @MessageBody()
+    data: { roomId: string; userId: number; nickName: string; message: string },
     @ConnectedSocket() client: Socket,
   ) {
     try {
@@ -184,6 +192,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         if (gameData.phase === 'night' && mafiaPlayerSocketId) {
           this.server.to(mafiaPlayerSocketId).emit(RoomEvents.CHAT_MAFIA, {
             sender: sender.id,
+            nickName: data.nickName,
             message: data.message,
           });
           messageSentToMafias = true; // 마피아에게 메시지를 보냈음을 기록
@@ -193,6 +202,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       if (!messageSentToMafias) {
         this.server.to(data.roomId).emit(RoomEvents.MESSAGE, {
           sender: sender.id,
+          nickName: data.nickName,
           message: data.message,
         });
       }
@@ -372,6 +382,10 @@ export class RoomGateway implements OnGatewayDisconnect {
     roomId: string,
     dayNumber: number,
   ): Promise<void> {
+    if (this.isFirstVoteFinalized) {
+      console.log(`fisrtVote가 이미 실행되었습니다 room : ${roomId}`);
+      return;
+    }
     this.nightResultService.announceFirstVoteStart(roomId, dayNumber);
     let phase = 'firstVote';
     // 15초 후 자동으로 투표 마감
@@ -445,6 +459,10 @@ export class RoomGateway implements OnGatewayDisconnect {
     roomId: string,
     dayNumber: number,
   ): Promise<void> {
+    if (this.isSecondVoteFinalized) {
+      console.log(`secondVote가 이미 실행되었습니다 room : ${roomId}`);
+      return;
+    }
     this.nightResultService.announceSecondVoteStart(roomId, dayNumber);
     let phase = 'secondVote';
     // 45초 후 자동으로 투표 마감
@@ -772,7 +790,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     if (roomData.hostId == data.userId) {
       if (await this.timerService.hasTimer(data.roomId, 'gamestart')) {
         client.emit('message', {
-          sender: 'system',
+          nickName: 'SYSTEM',
           message: '현재 게임을 시작하는 중 입니다.',
         });
       }
@@ -782,12 +800,12 @@ export class RoomGateway implements OnGatewayDisconnect {
     const roomStatus = await this.roomService.getRoomStatus(data.roomId);
     if (sockets.size === 8 && roomStatus !== '게임 중') {
       this.server.to(data.roomId).emit('message', {
-        sender: 'system',
+        nickName: 'SYSTEM',
         message: `대기 중인 ${data.userId}유저가 시작을 요청합니다.`,
       });
     } else {
       client.emit('message', {
-        sender: 'system',
+        nickName: 'SYSTEM',
         message: '현재 인원이 모이지 않았거나 게임 진행 중 입니다.',
       });
     }

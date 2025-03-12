@@ -29,6 +29,8 @@ export class RoomService {
   // 내부 맵: 사용자 소켓 및 방 타이머 관리
   // ──────────────────────────────
   private userSocketMap: Map<number, string> = new Map();
+  private isStartFinalized: boolean = false;
+
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
@@ -63,7 +65,7 @@ export class RoomService {
 
   // 시스템 메시지 전송: 지정된 방의 모든 클라이언트에 'message' 이벤트 발행
   sendSystemMessage(server: Server, roomId: string, message: string): void {
-    server.to(roomId).emit('message', { sender: 'system', message });
+    server.to(roomId).emit('message', { nickName: 'system', message });
   }
 
   // ──────────────────────────────
@@ -156,13 +158,14 @@ export class RoomService {
               message: `${player.role} 입니다!`,
               sender: player,
             });
-          }, 3000);
+          }, 4500);
         }
       });
 
       //CHAN TimerService를 사용하여 게임 시작 타이머 설정
       await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
       await this.gameService.startDayPhase(roomId, gameId, server);
+      this.isStartFinalized = false;
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }
@@ -212,7 +215,7 @@ export class RoomService {
     client.join(roomId);
     this.userSocketMap.set(userId, client.id);
     // [수정] 접속 공지: 기존 sendSystemMessage 대신 NightResultService의 announceJoinRoom 호출
-    this.nightResultService.announceJoinRoom(roomId, userId);
+    this.nightResultService.announceJoinRoom(roomId, nickName);
 
     // 최신 방 정보 조회 후 ROOM:UPDATED 이벤트 전송
     const roomData = await this.getRoomInfo(roomId);
@@ -231,7 +234,16 @@ export class RoomService {
     return time;
   }
 
+  async resetStartFinalized() {
+    this.isStartFinalized = false;
+  }
+
   async startGame(roomId: string, server: Server) {
+    if (this.isStartFinalized) {
+      console.log(`startGame이 이미 실행되었습니다 room : ${roomId}`);
+      return;
+    }
+    this.isStartFinalized = true;
     const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
     const sockets = await server.in(roomId).allSockets();
     if (
