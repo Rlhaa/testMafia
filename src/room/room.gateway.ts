@@ -15,6 +15,7 @@ import { NightResultService } from 'src/notice/night-result.service';
 import { Inject, forwardRef } from '@nestjs/common';
 import { TimerService } from 'src/timer/timer.service';
 import { RoomEvents } from './room.events.enum';
+import { error } from 'console';
 
 export interface Player {
   id: number;
@@ -276,7 +277,16 @@ export class RoomGateway implements OnGatewayDisconnect {
   async handleDisconnect(client: Socket) {
     const roomId = client.handshake.auth.roomId as string;
     const userId = client.handshake.auth.userId as number;
-    await this.roomService.leaveRoom(this.server, client, roomId, userId);
+    try {
+      const room = await this.roomService.getRoomInfo(roomId);
+      if (room) {
+        await this.roomService.leaveRoom(this.server, client, roomId, userId);
+      } else {
+        console.log(`방 ${roomId}가 존재하지 않아 퇴장 처리를 건너뜁니다.`);
+      }
+    } catch (error) {
+      console.error('handleDisconnect 에러 발생:', error);
+    }
   }
 
   // ──────────────────────────────
