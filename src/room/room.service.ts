@@ -7,6 +7,7 @@ import {
   Inject,
   Logger,
   forwardRef,
+  RequestTimeoutException,
 } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { Server, Socket, RemoteSocket } from 'socket.io';
@@ -235,6 +236,11 @@ export class RoomService {
       await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
       await this.prepareGame(server, roomId);
     }
+  }
+
+  async getRoomStatus(roomId: string) {
+    const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
+    return roomStatus;
   }
 
   // leaveRoom: 클라이언트의 방 퇴장 및 관련 처리

@@ -758,7 +758,8 @@ export class RoomGateway implements OnGatewayDisconnect {
       this.roomService.startGame(data.roomId, this.server);
     }
     const sockets = await this.server.in(data.roomId).allSockets();
-    if (sockets.size === 8) {
+    const roomStatus = await this.roomService.getRoomStatus(data.roomId);
+    if (sockets.size === 8 && roomStatus !== '게임 중') {
       this.server.to(data.roomId).emit('message', {
         sender: 'system',
         message: `대기 중인 ${data.userId}유저가 시작을 요청합니다.`,
@@ -766,7 +767,7 @@ export class RoomGateway implements OnGatewayDisconnect {
     } else {
       client.emit('message', {
         sender: 'system',
-        message: '현재 인원이 모이지 않았습니다.',
+        message: '현재 인원이 모이지 않았거나 게임 진행 중 입니다.',
       });
     }
   }
