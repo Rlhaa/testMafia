@@ -223,6 +223,11 @@ export class RoomService {
     }
   }
 
+  async getTtlTime(roomId: string, phase: string) {
+    const time = this.timerService.getRemainingTime(roomId, phase);
+    return time;
+  }
+
   async startGame(roomId: string, server: Server) {
     const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
     const sockets = await server.in(roomId).allSockets();

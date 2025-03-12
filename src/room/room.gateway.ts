@@ -33,6 +33,9 @@ export class RoomGateway implements OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
+  private isFirstVoteFinalized: boolean = false;
+  private isSecondVoteFinalized: boolean = false;
+
   constructor(
     @Inject(forwardRef(() => GameService))
     private readonly gameService: GameService,
@@ -294,6 +297,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       );
       console.log('handleFirstVote 결과:', result);
       if (!result.success) return;
+
       if (result.allVotesCompleted) {
         this.timerService.cancelTimer(data.roomId, 'day');
         await this.finalizeFirstVote(data.roomId);
@@ -323,6 +327,7 @@ export class RoomGateway implements OnGatewayDisconnect {
         message: '투표가 완료되었습니다.',
         voterId: data.voterId,
       });
+
       if (result.allVotesCompleted) {
         this.timerService.cancelTimer(data.roomId, 'secondVote');
         await this.finalizeSecondVote(data.roomId);
@@ -371,7 +376,11 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   private async finalizeFirstVote(roomId: string) {
     try {
-      //CHAN 데이 얻을 방법 이것밖에 없나?
+      if (this.isFirstVoteFinalized) {
+        console.log(`fisrtVote가 이미 실행되었습니다 room : ${roomId}`);
+        return;
+      }
+      this.isFirstVoteFinalized = true;
       const gameId = await this.gameService.getCurrentGameId(roomId);
       const gameData = await this.gameService.getGameData(
         roomId,
@@ -440,6 +449,11 @@ export class RoomGateway implements OnGatewayDisconnect {
 
   private async finalizeSecondVote(roomId: string) {
     try {
+      if (this.isSecondVoteFinalized) {
+        console.log(`secondVote가 이미 실행되었습니다 room : ${roomId}`);
+        return;
+      }
+      this.isSecondVoteFinalized = true;
       const targetId = await this.gameService.getTargetId(roomId);
       const finalResult =
         await this.gameService.calculateSecondVoteResult(roomId);
@@ -605,6 +619,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       const allCompleted = await this.gameService.checkAllNightActionsCompleted(
         data.roomId,
       );
+
       if (allCompleted) {
         this.timerService.cancelTimer(data.roomId, 'night');
         await this.gameService.triggerNightProcessing(this.server, data.roomId);
@@ -638,6 +653,7 @@ export class RoomGateway implements OnGatewayDisconnect {
       const allCompleted = await this.gameService.checkAllNightActionsCompleted(
         data.roomId,
       );
+
       if (allCompleted) {
         this.timerService.cancelTimer(data.roomId, 'night');
         await this.gameService.triggerNightProcessing(this.server, data.roomId);
@@ -720,24 +736,13 @@ export class RoomGateway implements OnGatewayDisconnect {
       }
       await this.gameService.removeNightResultProcessed(roomId);
       return result;
-      // ✅ 낮 단계 전환 (10초 후)
-      // setTimeout(async () => {
-      //   const gameId = await this.gameService.getCurrentGameId(roomId); // 🔥 gameId 조회 추가
-      //   if (!gameId) {
-      //     console.error('🚨 낮 단계 전환 실패: gameId가 null임.');
-      //     return;
-      //   }
-
-      //   await this.gameService.startDayPhase(roomId, gameId); // ✅ gameId 전달
-      //   this.server.to(roomId).emit('message', {
-      //     sender: 'system',
-      //     message: `🌞 낮이 밝았습니다!`,
-      //   });
-      //   console.log(`✅ 낮 단계로 이동`);
-      // }, 10000);
     } catch (error) {
       console.error(`🚨 NIGHT RESULT ERROR:`, error);
     }
+  }
+  async resetFlag() {
+    this.isFirstVoteFinalized = false;
+    this.isSecondVoteFinalized = false;
   }
 
   @SubscribeMessage('startGame')

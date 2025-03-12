@@ -2,7 +2,6 @@ import {
   Injectable,
   BadRequestException,
   Inject,
-  Logger,
   forwardRef,
 } from '@nestjs/common';
 import { Redis } from 'ioredis';
@@ -31,7 +30,8 @@ export interface Player {
 
 @Injectable()
 export class GameService {
-  private readonly logger = new Logger(GameService.name); //타이머 로그용 임시 추가
+  private isNightFinalized: boolean = false;
+
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis, // ioredis 클라이언트 주입 (로컬 또는 Elasticache Redis)
@@ -191,6 +191,8 @@ export class GameService {
       sender: 'system',
       message: `Day ${currentDay} 낮이 밝았습니다!`,
     });
+    this.isNightFinalized = false;
+    await this.roomGateway.resetFlag();
     let phase = 'day';
     this.timerService.startTimer(roomId, 'day', 120000).subscribe({
       next: (remainingTimeSec) => {
@@ -1105,6 +1107,13 @@ export class GameService {
   // 마피아,경찰,의사가 행동을 완료했을 때에 작동하는 함수
   async triggerNightProcessing(server: Server, roomId: string) {
     try {
+      if (this.isNightFinalized) {
+        console.log(
+          `night 결과처리 함수가 이미 실행되었습니다 room : ${roomId}`,
+        );
+        return;
+      }
+      this.isNightFinalized = true;
       console.log(`🔥 모든 밤 액션이 완료됨. 밤 결과 처리 시작...`);
 
       // 게임 결과 전송

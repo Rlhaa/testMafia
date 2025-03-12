@@ -63,11 +63,11 @@ export class TimerService {
         );
       });
 
-    return interval(100).pipe(
+    return interval(1000).pipe(
       switchMap(() => from(this.getRemainingTime(roomId, phase))),
       map((remainingTime) => {
-        if (remainingTime <= 150) {
-          this.completedTimers.set(key, true); // 타이머 완료 설정
+        if (remainingTime <= 1000) {
+          this.completedTimers.set(key, true); // 타이머 완료 설정 (시간만 처리해야함)
           this.stopSubjects.delete(key);
           this.logger.log(`✅ Timer expired for ${roomId} (${phase})`);
         }
