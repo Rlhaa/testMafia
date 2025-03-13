@@ -542,8 +542,11 @@ export class RoomGateway implements OnGatewayDisconnect {
       // 게임 종료 체크
       const endCheck = await this.gameService.checkEndGame(roomId);
       if (endCheck.isGameOver) {
+        const roomData = await this.roomService.getRoomInfo(roomId);
         const gameEndResult = await this.gameService.endGame(roomId);
-        this.server.to(roomId).emit(RoomEvents.GAME_END, gameEndResult);
+        this.server
+          .to(roomId)
+          .emit(RoomEvents.GAME_END, gameEndResult, roomData);
         return;
       }
 
@@ -587,7 +590,8 @@ export class RoomGateway implements OnGatewayDisconnect {
   ) {
     try {
       const result = await this.gameService.endGame(data.roomId);
-      this.server.to(data.roomId).emit(RoomEvents.GAME_END, result);
+      const roomData = await this.roomService.getRoomInfo(data.roomId);
+      this.server.to(data.roomId).emit(RoomEvents.GAME_END, result, roomData);
     } catch (error) {
       client.emit(RoomEvents.ERROR, {
         message: '게임 종료 처리 중 오류 발생.',
@@ -765,7 +769,8 @@ export class RoomGateway implements OnGatewayDisconnect {
       if (endCheck.isGameOver) {
         console.log(`🏁 게임 종료 감지 - ${endCheck.winningTeam} 팀 승리!`);
         const endResult = await this.gameService.endGame(roomId);
-        this.server.to(roomId).emit(RoomEvents.GAME_END, endResult);
+        const roomData = await this.roomService.getRoomInfo(roomId);
+        this.server.to(roomId).emit(RoomEvents.GAME_END, endResult, roomData);
         return; // 게임이 끝났으므로 더 이상 낮 단계로 이동하지 않음
       }
       await this.gameService.removeNightResultProcessed(roomId);
