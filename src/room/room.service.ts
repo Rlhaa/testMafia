@@ -221,12 +221,12 @@ export class RoomService {
     const roomData = await this.getRoomInfo(roomId);
     server.to(roomId).emit('ROOM:UPDATED', roomData);
     const sockets = await server.in(roomId).allSockets();
-    if (sockets.size === 8) {
-      // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
-      this.nightResultService.announceRoomFull(roomId);
-      // 방 인원이 8명이면 게임 자동 시작 타이머 설정
-      this.startGame(roomId, server);
-    }
+    // if (sockets.size === 8) {
+    //   // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
+    //   this.nightResultService.announceRoomFull(roomId);
+    //   // 방 인원이 8명이면 게임 자동 시작 타이머 설정
+    //   this.startGame(roomId, server);
+    // }
   }
 
   async getTtlTime(roomId: string, phase: string) {

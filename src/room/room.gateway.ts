@@ -495,11 +495,12 @@ export class RoomGateway implements OnGatewayDisconnect {
       this.timerService.cancelTimer(roomId, 'secondVote');
       let nightSignalSent = false; // 밤 시작 신호 전송 여부
 
-      if (finalResult.tie) {
+      // 생존 결과 또는 동률인 경우 VOTE:SECOND:TIE 이벤트 발생
+      if (finalResult.tie || !finalResult.execute) {
         this.roomService.sendSystemMessage(
           this.server,
           roomId,
-          `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
+          `투표 결과: ${finalResult.tie ? '동률' : '생존'} 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
         this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_TIE, { targetId });
         nightSignalSent = true;
