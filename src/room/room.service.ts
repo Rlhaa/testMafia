@@ -252,8 +252,8 @@ export class RoomService {
       //  && !this.timerService.hasTimer(roomId, 'gamestart')
     ) {
       //타이머 존재 확인 CHAN 서순 정리 / 시작공지 10초 기다리기 / 배정
-      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
       this.nightResultService.announceGameStart(roomId);
+      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
       await this.redisClient.hset(`room:${roomId}`, 'status', '게임 중');
       await this.prepareGame(server, roomId);
     }
