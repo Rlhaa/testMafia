@@ -502,10 +502,6 @@ export class RoomGateway implements OnGatewayDisconnect {
           `투표 결과: 동률 발생. 사형 투표자: ${finalResult.executeVoterIds}, 생존 투표자: ${finalResult.surviveVoterIds}`,
         );
         this.server.to(roomId).emit(RoomEvents.VOTE_SECOND_TIE, { targetId });
-        this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
-          message: '생존 투표 결과 동률로, 밤 단계 시작',
-        });
-
         nightSignalSent = true;
       }
 
@@ -565,10 +561,11 @@ export class RoomGateway implements OnGatewayDisconnect {
         this.server.to(roomId).emit(RoomEvents.NIGHT_START_SIGNAL);
         console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 전송됨');
       }
-      this.server.to(roomId).emit(RoomEvents.NIGHT_START_SIGNAL);
-      console.log('NIGHT:START:SIGNAL 이벤트 클라이언트로 전송됨');
+
       this.server.to(roomId).emit(RoomEvents.NIGHT_BACKGROUND, {
-        message: '생존투표 후 사망자 처리 완료, 밤 단계 시작',
+        message: finalResult.execute
+          ? '생존투표 후 사망자 처리 완료, 밤 단계 시작'
+          : '생존 투표 결과 동률로, 밤 단계 시작',
       });
 
       this.server.to(roomId).emit(RoomEvents.ROOM_NIGHT_START, {
