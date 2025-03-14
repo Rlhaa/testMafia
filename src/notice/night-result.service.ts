@@ -86,13 +86,18 @@ export class NightResultService {
   }
 
   // 추가된 시스템 공지 함수들 이건 룸 서비스 기본 코드 토대로 만들었습니다.
-  announceJoinRoom(roomId: string, userId: number): void {
-    const message = `${userId}번 유저가 ${roomId}번 방에 접속하였습니다.`;
+  announceJoinRoom(roomId: string, nickName: string): void {
+    const message = `${nickName} 유저가 ${roomId}번 방에 접속하였습니다.`;
     this.announceSystemMessage(roomId, message);
   }
 
   announceRoomFull(roomId: string): void {
-    const message = '방이 꽉 찼습니다. 10초 후 게임이 시작됩니다.';
+    const message = '방이 꽉 찼습니다.';
+    this.announceSystemMessage(roomId, message);
+  }
+
+  announceGameStart(roomId: string): void {
+    const message = '10초 후 게임이 시작됩니다.';
     this.announceSystemMessage(roomId, message);
   }
 

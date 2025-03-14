@@ -7,6 +7,7 @@ import {
   Inject,
   Logger,
   forwardRef,
+  RequestTimeoutException,
 } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { Server, Socket, RemoteSocket } from 'socket.io';
@@ -17,6 +18,7 @@ import { TimerService } from 'src/timer/timer.service';
 
 interface Player {
   id: number;
+  nickName: string;
   role?: string;
   isAlive?: boolean;
 }
@@ -27,6 +29,8 @@ export class RoomService {
   // 내부 맵: 사용자 소켓 및 방 타이머 관리
   // ──────────────────────────────
   private userSocketMap: Map<number, string> = new Map();
+  private isStartFinalized: boolean = false;
+
   constructor(
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
@@ -61,7 +65,7 @@ export class RoomService {
 
   // 시스템 메시지 전송: 지정된 방의 모든 클라이언트에 'message' 이벤트 발행
   sendSystemMessage(server: Server, roomId: string, message: string): void {
-    server.to(roomId).emit('message', { sender: 'system', message });
+    server.to(roomId).emit('message', { nickName: 'system', message });
   }
 
   // ──────────────────────────────
@@ -106,6 +110,7 @@ export class RoomService {
 
   // 새로운 플레이어를 추가 (최대 8명, 중복 추가 방지)
   async addPlayer(roomId: string, newPlayer: Player): Promise<Player[]> {
+    console.log(newPlayer);
     const roomData = await this.getRoomInfo(roomId);
     const players: Player[] = this.parsePlayers(roomData.players);
     if (players.length >= 8) {
@@ -151,22 +156,16 @@ export class RoomService {
           setTimeout(() => {
             socket.emit('YOUR_ROLE', {
               message: `${player.role} 입니다!`,
-              role: player.role,
-              isAlive: player.isAlive,
               sender: player,
             });
-          }, 3000);
-          socket.emit('YOUR_ROLE', {
-            role: player.role,
-          });
+          }, 4000);
         }
       });
 
       //CHAN TimerService를 사용하여 게임 시작 타이머 설정
-      await this.timerService
-        .startTimer(roomId, 'gamestart', 10000)
-        .toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
+      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise(); // 10초 후에 게임 시작 // 이후 낮을 호출하기 위해 코드 위치 변경 CHAN
       await this.gameService.startDayPhase(roomId, gameId, server);
+      this.isStartFinalized = false;
     } catch (error: any) {
       server.to(roomId).emit('error', { message: error.message });
     }
@@ -182,6 +181,7 @@ export class RoomService {
     client: Socket,
     roomId: string,
     userId: number,
+    nickName: string,
   ): Promise<void> {
     if (!roomId || !userId) {
       client.emit('error', { message: 'roomId와 userId가 필요합니다.' });
@@ -205,7 +205,7 @@ export class RoomService {
 
     // 플레이어 추가
     try {
-      await this.addPlayer(roomId, { id: userId });
+      await this.addPlayer(roomId, { id: userId, nickName });
     } catch (error: any) {
       client.emit('error', { message: error.message });
       return;
@@ -215,26 +215,53 @@ export class RoomService {
     client.join(roomId);
     this.userSocketMap.set(userId, client.id);
     // [수정] 접속 공지: 기존 sendSystemMessage 대신 NightResultService의 announceJoinRoom 호출
-    this.nightResultService.announceJoinRoom(roomId, userId);
+    this.nightResultService.announceJoinRoom(roomId, nickName);
 
     // 최신 방 정보 조회 후 ROOM:UPDATED 이벤트 전송
     const roomData = await this.getRoomInfo(roomId);
     server.to(roomId).emit('ROOM:UPDATED', roomData);
+    const sockets = await server.in(roomId).allSockets();
+    // if (sockets.size === 8) {
+    //   // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
+    //   this.nightResultService.announceRoomFull(roomId);
+    //   // 방 인원이 8명이면 게임 자동 시작 타이머 설정
+    //   this.startGame(roomId, server);
+    // }
+  }
 
-    // 방 인원이 8명이면 게임 자동 시작 타이머 설정
+  async getTtlTime(roomId: string, phase: string) {
+    const time = this.timerService.getRemainingTime(roomId, phase);
+    return time;
+  }
+
+  async resetStartFinalized() {
+    this.isStartFinalized = false;
+  }
+
+  async startGame(roomId: string, server: Server) {
+    if (this.isStartFinalized) {
+      console.log(`startGame이 이미 실행되었습니다 room : ${roomId}`);
+      return;
+    }
+    this.isStartFinalized = true;
+    const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
     const sockets = await server.in(roomId).allSockets();
     if (
       sockets.size === 8 &&
-      !this.timerService.hasTimer(roomId, 'gamestart')
+      roomStatus !== '게임 중'
+      //  && !this.timerService.hasTimer(roomId, 'gamestart')
     ) {
-      // [수정] 방 꽉 참 공지: NightResultService의 announceRoomFull 호출
-      this.nightResultService.announceRoomFull(roomId);
       //타이머 존재 확인 CHAN 서순 정리 / 시작공지 10초 기다리기 / 배정
-      await this.timerService
-        .startTimer(roomId, 'gamestart', 10000)
-        .toPromise();
+      this.nightResultService.announceGameStart(roomId);
+      await this.timerService.startTimer(roomId, 'gamestart', 5000).toPromise();
+      await this.redisClient.hset(`room:${roomId}`, 'status', '게임 중');
       await this.prepareGame(server, roomId);
     }
+  }
+
+  async getRoomStatus(roomId: string) {
+    const roomStatus = await this.redisClient.hget(`room:${roomId}`, 'status');
+    return roomStatus;
   }
 
   // leaveRoom: 클라이언트의 방 퇴장 및 관련 처리
@@ -260,10 +287,16 @@ export class RoomService {
 
     // 인원이 8명 미만이면 진행 중인 게임 시작 타이머 취소
     const sockets = await server.in(roomId).allSockets();
-    if (sockets.size < 8 && this.timerService.hasTimer(roomId, 'gamestart')) {
+    if (
+      sockets.size < 8 &&
+      (await this.timerService.hasTimer(roomId, 'gamestart'))
+    ) {
       this.timerService.cancelTimer(roomId, 'gamestart');
       // [수정] 타이머 취소 공지: 기존 sendSystemMessage 대신 NightResultService의 announceCancelTimer 호출
       this.nightResultService.announceCancelTimer(roomId);
+    }
+    if (sockets.size === 0) {
+      this.redisClient.del(`room:${roomId}`);
     }
   }
 }

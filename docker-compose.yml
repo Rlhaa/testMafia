@@ -1,21 +1,30 @@
-version: '3'
+version: '3.8'
 
 services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile # 루트에 있는 애플리케이션 Dockerfile 사용
-    ports:
-      - '3000:3000'
+      dockerfile: Dockerfile
     environment:
-      REDIS_HOST: redis # 애플리케이션 내부에서 사용 (redis.provider.ts 참고)
+      REDIS_HOST: redis
       REDIS_PORT: 6379
+    ports:
+      - '3000:3000' # ECS에서는 ALB를 통해 접근 가능
     depends_on:
-      - redis
+      - redis # (ECS에서는 무시됨)
+    restart: always # Redis가 늦게 실행되더라도 재시작 가능하도록 설정
 
   redis:
     build:
-      context: ./src/redis # src 안의 redis 폴더를 빌드 컨텍스트로 지정
+      context: ./src/redis
       dockerfile: Dockerfile
+    container_name: mafia-redis
     ports:
       - '6379:6379'
+    volumes:
+      - redis_data:/data # AWS EFS를 사용할 수도 있음
+    command: ['redis-server', '/usr/local/etc/redis/redis.conf']
+    restart: always # 컨테이너가 종료되더라도 자동 재시작
+
+volumes:
+  redis_data:
